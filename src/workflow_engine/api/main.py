@@ -9,13 +9,8 @@ from typing import Dict, Any, Optional, Union, List
 import json
 
 from ..core.engine import WorkflowEngine, NodeResult
-from ..nodes.nodes import (
-    TextConcatNode, 
-    TextReplaceNode, 
-    AddNode, 
-    MultiplyNode,
-    ChatNode
-)
+import importlib
+from ..core.node_config import NodeConfigManager
 from .config import API_CONFIG, retry_on_error
 import aiohttp
 
@@ -114,12 +109,31 @@ async def execute_workflow(request: WorkflowRequest):
         logger.info("开始创建工作流引擎实例")
         engine = WorkflowEngine()
         
-        # 注册节点类型
-        engine.register_node_type("text_concat", TextConcatNode)
-        engine.register_node_type("text_replace", TextReplaceNode)
-        engine.register_node_type("add", AddNode)
-        engine.register_node_type("multiply", MultiplyNode)
-        engine.register_node_type("chat", ChatNode)
+        # 从配置中获取并注册节点类型
+        node_manager = NodeConfigManager()
+        node_configs = node_manager.node_configs
+        
+        # 动态导入并注册节点
+        for class_name in node_configs.keys():
+            # 获取节点配置中定义的type
+            node_type = node_configs[class_name].get('type')
+            if not node_type:
+                logger.warning(f"节点 {class_name} 未配置type字段，跳过注册")
+                continue
+                
+            # 从type生成模块名，例如：text_concat -> text_concat
+            module_name = node_type
+            
+            try:
+                # 动态导入节点模块
+                module = importlib.import_module(f"..nodes.{module_name}", package="workflow_engine.api")
+                node_class = getattr(module, class_name)
+                # 使用配置的type注册节点类型
+                engine.register_node_type(node_type, node_class)
+                logger.info(f"成功注册节点类型: {node_type}")
+            except Exception as e:
+                logger.error(f"注册节点类型 {module_name} 失败: {str(e)}")
+                raise
         
         # 执行工作流
         logger.info("开始执行工作流")
@@ -335,19 +349,39 @@ async def process_natural_language(request: NaturalLanguageRequest):
         if workflow and workflow.get("nodes") and len(workflow["nodes"]) > 0:
             engine = WorkflowEngine()
             
-            # 注册节点类型
-            engine.register_node_type("text_concat", TextConcatNode)
-            engine.register_node_type("text_replace", TextReplaceNode)
-            engine.register_node_type("add", AddNode)
-            engine.register_node_type("multiply", MultiplyNode)
-            engine.register_node_type("chat", ChatNode)
+            # 从配置中获取并注册节点类型
+            node_manager = NodeConfigManager()
+            node_configs = node_manager.node_configs
+            
+            # 动态导入并注册节点
+            for class_name in node_configs.keys():
+                # 获取节点配置中定义的type
+                node_type = node_configs[class_name].get('type')
+                if not node_type:
+                    logger.warning(f"节点 {class_name} 未配置type字段，跳过注册")
+                    continue
+                    
+                # 从type生成模块名，例如：text_concat -> text_concat
+                module_name = node_type
+                
+                try:
+                    # 动态导入节点模块
+                    module = importlib.import_module(f"..nodes.{module_name}", package="workflow_engine.api")
+                    node_class = getattr(module, class_name)
+                    # 使用配置的type注册节点类型
+                    engine.register_node_type(node_type, node_class)
+                    logger.info(f"成功注册节点类型: {node_type}")
+                except Exception as e:
+                    logger.error(f"注册节点类型 {module_name} 失败: {str(e)}")
+                    raise
             
             # 执行工作流
             logger.info("开始执行自然语言生成的工作流")
             workflow_json = json.dumps(workflow, indent=2)
             logger.info(f"生成的工作流内容:\n{workflow_json}")
+            workflow_id = f"workflow-{datetime.now().strftime('%Y%m%d%H%M%S')}"
             results = await engine.execute_workflow(
-                workflow_json
+                workflow_json,workflow_id=workflow_id
             )
             logger.info(f"工作流执行结果:\n{json.dumps(results, indent=2, default=str)}")
             logger.info("工作流执行完成")

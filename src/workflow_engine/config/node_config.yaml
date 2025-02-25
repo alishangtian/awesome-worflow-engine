@@ -1,79 +1,247 @@
-text_concat:
-  name: 文本连接节点
-  description: 连接两个文本
+# 节点配置文件
+# 定义所有可用的节点类型及其参数
+
+TextConcatNode:
+  type: "text_concat"
+  name: "文本拼接"
+  description: "文本拼接节点"
+  output:
+    result: "拼接后的文本"
   params:
     text1:
-      type: string
-      description: 第一个文本
+      type: "str"
+      required: true
+      description: "第一段文本"
     text2:
-      type: string
-      description: 第二个文本
+      type: "str"
+      required: true
+      description: "第二段文本"
     separator:
-      type: string
-      description: 分隔符
-      optional: true
+      type: "str"
+      required: false
       default: ""
-  output:
-    result: 连接后的文本
+      description: "分隔符"
 
-text_replace:
-  name: 文本替换节点
-  description: 替换文本中的指定内容
+TextReplaceNode:
+  type: "text_replace"
+  name: "文本替换"
+  description: "文本替换节点"
+  output:
+    result: "替换后的文本"
   params:
     text:
-      type: string
-      description: 原始文本
+      type: "str"
+      required: true
+      description: "原始文本"
     old_str:
-      type: string
-      description: 要替换的文本
+      type: "str"
+      required: true
+      description: "要替换的文本"
     new_str:
-      type: string
-      description: 替换成的文本
-  output:
-    result: 替换后的文本
+      type: "str"
+      required: true
+      description: "替换后的文本"
 
-add:
-  name: 加法节点
-  description: 执行加法运算
+AddNode:
+  type: "add"
+  name: "加法"
+  description: "数值加法节点"
+  output:
+    result: "相加的结果"
   params:
     num1:
-      type: number
-      description: 第一个数字
+      type: "float"
+      required: true
+      description: "第一个数值"
     num2:
-      type: number
-      description: 第二个数字
-  output:
-    result: 相加结果
+      type: "float"
+      required: true
+      description: "第二个数值"
 
-multiply:
-  name: 乘法节点
-  description: 执行乘法运算
+MultiplyNode:
+  type: "multiply"
+  name: "乘法"
+  description: "数值乘法节点"
+  output:
+    result: "相乘的结果"
   params:
     num1:
-      type: number
-      description: 第一个数字
+      type: "float"
+      required: true
+      description: "第一个数值"
     num2:
-      type: number
-      description: 第二个数字
-  output:
-    result: 相乘结果
+      type: "float"
+      required: true
+      description: "第二个数值"
 
-chat:
-  name: LLM对话节点
-  description: 与LLM模型对话
+ChatNode:
+  type: "chat"
+  name: "AI对话"
+  description: "AI对话节点"
+  output:
+    response: "AI的回复内容"
   params:
     input:
-      type: string
-      description: 输入文本
+      type: "str"
+      required: true
+      description: "输入文本"
     model:
-      type: string
-      description: 模型名称
-      optional: true
-      default: gpt-3.5-turbo
+      type: "str"
+      required: false
+      default: "alibaba/qwen-max-2025-01-25"
+      description: "使用的模型"
     temperature:
-      type: number
-      description: 温度参数
-      optional: true
+      type: "float"
+      required: false
       default: 0.7
+      description: "温度参数(0-1)"
+    max_tokens:
+      type: "int"
+      required: false
+      default: 2000
+      description: "最大token数"
+
+FileReadNode:
+  type: "file_read"
+  name: "文件读取"
+  description: "文件读取节点"
   output:
-    result: 模型回复文本
+    content: "文件内容"
+  params:
+    path:
+      type: "str"
+      required: true
+      description: "文件路径"
+    encoding:
+      type: "str"
+      required: false
+      default: "utf-8"
+      description: "文件编码"
+
+FileWriteNode:
+  type: "file_write"
+  name: "文件写入"
+  description: "文件写入节点"
+  output:
+    success: "写入是否成功"
+  params:
+    path:
+      type: "str"
+      required: true
+      description: "文件路径"
+    content:
+      type: "str"
+      required: true
+      description: "写入内容"
+    encoding:
+      type: "str"
+      required: false
+      default: "utf-8"
+      description: "文件编码"
+    mode:
+      type: "str"
+      required: false
+      default: "w"
+      description: "写入模式(w:覆盖, a:追加)"
+
+DbQueryNode:
+  type: "db_query"
+  name: "数据库查询"
+  description: "MySQL数据库查询节点"
+  output:
+    results: "查询结果集"
+  params:
+    host:
+      type: "str"
+      required: true
+      description: "数据库主机地址"
+    port:
+      type: "int"
+      required: false
+      default: 3306
+      description: "数据库端口"
+    user:
+      type: "str"
+      required: true
+      description: "数据库用户名"
+    password:
+      type: "str"
+      required: true
+      description: "数据库密码"
+    database:
+      type: "str"
+      required: true
+      description: "数据库名称"
+    query:
+      type: "str"
+      required: true
+      description: "SQL查询语句"
+    parameters:
+      type: "tuple"
+      required: false
+      default: ()
+      description: "查询参数(元组格式)"
+
+DbExecuteNode:
+  type: "db_execute"
+  name: "数据库执行"
+  description: "MySQL数据库执行节点"
+  output:
+    affected_rows: "受影响的行数"
+    last_insert_id: "最后插入的ID"
+  params:
+    host:
+      type: "str"
+      required: true
+      description: "数据库主机地址"
+    port:
+      type: "int"
+      required: false
+      default: 3306
+      description: "数据库端口"
+    user:
+      type: "str"
+      required: true
+      description: "数据库用户名"
+    password:
+      type: "str"
+      required: true
+      description: "数据库密码"
+    database:
+      type: "str"
+      required: true
+      description: "数据库名称"
+    statement:
+      type: "str"
+      required: true
+      description: "SQL执行语句"
+    parameters:
+      type: "tuple"
+      required: false
+      default: ()
+      description: "执行参数(元组格式)"
+    auto_commit:
+      type: "bool"
+      required: false
+      default: true
+      description: "是否自动提交"
+
+TerminalNode:
+  type: "terminal"
+  name: "终端命令"
+  description: "执行终端命令节点"
+  output:
+    stdout: "命令标准输出"
+    stderr: "命令标准错误"
+    return_code: "命令返回码"
+    success: "命令是否成功执行"
+  params:
+    command:
+      type: "str"
+      required: true
+      description: "要执行的shell命令"
+    shell:
+      type: "bool"
+      required: false
+      default: true
+      description: "是否使用shell执行命令"
