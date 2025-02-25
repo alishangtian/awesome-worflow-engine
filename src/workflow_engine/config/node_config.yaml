@@ -1,0 +1,79 @@
+text_concat:
+  name: 文本连接节点
+  description: 连接两个文本
+  params:
+    text1:
+      type: string
+      description: 第一个文本
+    text2:
+      type: string
+      description: 第二个文本
+    separator:
+      type: string
+      description: 分隔符
+      optional: true
+      default: ""
+  output:
+    result: 连接后的文本
+
+text_replace:
+  name: 文本替换节点
+  description: 替换文本中的指定内容
+  params:
+    text:
+      type: string
+      description: 原始文本
+    old_str:
+      type: string
+      description: 要替换的文本
+    new_str:
+      type: string
+      description: 替换成的文本
+  output:
+    result: 替换后的文本
+
+add:
+  name: 加法节点
+  description: 执行加法运算
+  params:
+    num1:
+      type: number
+      description: 第一个数字
+    num2:
+      type: number
+      description: 第二个数字
+  output:
+    result: 相加结果
+
+multiply:
+  name: 乘法节点
+  description: 执行乘法运算
+  params:
+    num1:
+      type: number
+      description: 第一个数字
+    num2:
+      type: number
+      description: 第二个数字
+  output:
+    result: 相乘结果
+
+chat:
+  name: LLM对话节点
+  description: 与LLM模型对话
+  params:
+    input:
+      type: string
+      description: 输入文本
+    model:
+      type: string
+      description: 模型名称
+      optional: true
+      default: gpt-3.5-turbo
+    temperature:
+      type: number
+      description: 温度参数
+      optional: true
+      default: 0.7
+  output:
+    result: 模型回复文本
