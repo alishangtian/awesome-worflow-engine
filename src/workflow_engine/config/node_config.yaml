@@ -245,3 +245,45 @@ TerminalNode:
       required: false
       default: true
       description: "是否使用shell执行命令"
+
+IndexBuildNode:
+  type: "index_build"
+  name: "索引构建"
+  description: "LlamaIndex文档索引构建节点"
+  output:
+    result: "构建结果(success/failed)"
+    doc_count: "处理的文档数量"
+    index_dir: "索引存储目录"
+    index_stats: "索引统计信息"
+  params:
+    clear_existing:
+      type: "bool"
+      required: false
+      default: false
+      description: "是否清理已有索引"
+
+IndexQueryNode:
+  type: "index_query"
+  name: "索引查询"
+  description: "LlamaIndex文档索引查询节点"
+  output:
+    result: "查询结果(success/failed)"
+    query: "查询内容"
+    answer: "AI回答内容"
+    sources: "引用的文档来源"
+    generation_info: "生成信息"
+  params:
+    query_str:
+      type: "str"
+      required: true
+      description: "查询内容"
+    similarity_top_k:
+      type: "int"
+      required: false
+      default: 3
+      description: "返回结果数量"
+    response_mode:
+      type: "str"
+      required: false
+      default: "compact"
+      description: "响应模式"

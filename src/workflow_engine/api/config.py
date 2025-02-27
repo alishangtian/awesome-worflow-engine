@@ -9,9 +9,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_CONFIG = {
-    "api_key": os.getenv("API_KEY"),
+    "api_key": os.getenv("API_KEY","API_KEY"),
     "model_name": os.getenv("MODEL_NAME", "gpt-3.5-turbo"),
-    "base_url": os.getenv("BASE_URL", "https://api.360.cn/v1")
+    "base_url": os.getenv("BASE_URL", "https://api.360.cn/v1"),
+    "doc_dir": os.getenv("DOC_DIR", "./docs"),
+    "index_dir": os.getenv("INDEX_DIR", "./storage"),
+    "long_context_model": os.getenv("LONG_CONTEXT_MODEL", "Doubao-pro-256k")
 }
 
 def retry_on_error(max_retries: int = 3):

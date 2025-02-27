@@ -22,6 +22,39 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 创建全局WorkflowEngine实例
+engine = WorkflowEngine()
+
+# 在启动时注册所有节点类型
+def register_all_nodes():
+    """注册所有可用的节点类型"""
+    node_manager = NodeConfigManager()
+    node_configs = node_manager.node_configs
+    
+    for class_name in node_configs.keys():
+        # 获取节点配置中定义的type
+        node_type = node_configs[class_name].get('type')
+        if not node_type:
+            logger.warning(f"节点 {class_name} 未配置type字段，跳过注册")
+            continue
+            
+        # 从type生成模块名
+        module_name = node_type
+        
+        try:
+            # 动态导入节点模块
+            module = importlib.import_module(f"..nodes.{module_name}", package="workflow_engine.api")
+            node_class = getattr(module, class_name)
+            # 使用配置的type注册节点类型
+            engine.register_node_type(node_type, node_class)
+            logger.info(f"成功注册节点类型: {node_type}")
+        except Exception as e:
+            logger.error(f"注册节点类型 {module_name} 失败: {str(e)}")
+            raise
+
+# 在应用启动时注册所有节点
+register_all_nodes()
+
 app = FastAPI(
     title="Workflow Engine API",
     description="""
@@ -91,79 +124,6 @@ class NodeResultResponse(BaseModel):
     success: bool = Field(..., description="节点执行是否成功")
     data: Optional[Dict[str, Any]] = Field(None, description="节点执行结果数据")
     error: Optional[str] = Field(None, description="错误信息（如果执行失败）")
-
-@app.post("/execute", response_model=Dict[str, NodeResultResponse])
-async def execute_workflow(request: WorkflowRequest):
-    """
-    执行工作流
-    
-    Args:
-        request: 包含工作流定义和全局参数的请求体
-        
-    Returns:
-        Dict[str, NodeResultResponse]: 工作流执行结果
-    """
-    logger.info(f"收到工作流执行请求: {len(request.workflow.get('nodes', []))} 个节点")
-    try:
-        start_time = datetime.now()
-        logger.info("开始创建工作流引擎实例")
-        engine = WorkflowEngine()
-        
-        # 从配置中获取并注册节点类型
-        node_manager = NodeConfigManager()
-        node_configs = node_manager.node_configs
-        
-        # 动态导入并注册节点
-        for class_name in node_configs.keys():
-            # 获取节点配置中定义的type
-            node_type = node_configs[class_name].get('type')
-            if not node_type:
-                logger.warning(f"节点 {class_name} 未配置type字段，跳过注册")
-                continue
-                
-            # 从type生成模块名，例如：text_concat -> text_concat
-            module_name = node_type
-            
-            try:
-                # 动态导入节点模块
-                module = importlib.import_module(f"..nodes.{module_name}", package="workflow_engine.api")
-                node_class = getattr(module, class_name)
-                # 使用配置的type注册节点类型
-                engine.register_node_type(node_type, node_class)
-                logger.info(f"成功注册节点类型: {node_type}")
-            except Exception as e:
-                logger.error(f"注册节点类型 {module_name} 失败: {str(e)}")
-                raise
-        
-        # 执行工作流
-        logger.info("开始执行工作流")
-        workflow_json = json.dumps(request.workflow, indent=2)
-        logger.info(f"工作流内容:\n{workflow_json}")
-        results = await engine.execute_workflow(
-            workflow_json,
-            global_params=request.global_params
-        )
-        logger.info(f"工作流执行结果:\n{json.dumps(results, indent=2, default=str)}")
-        execution_time = (datetime.now() - start_time).total_seconds()
-        logger.info(f"工作流执行完成，耗时: {execution_time:.2f}秒")
-        
-        # 转换结果为API响应格式
-        response = {}
-        for node_id, result in results.items():
-            response[node_id] = NodeResultResponse(
-                success=result.success,
-                data=result.data if result.success else None,
-                error=result.error if not result.success else None
-            )
-            
-        return response
-        
-    except Exception as e:
-        logger.error(f"工作流执行失败: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"工作流执行失败: {str(e)}"
-        )
 
 @app.get("/health")
 async def health_check():
@@ -347,34 +307,7 @@ async def process_natural_language(request: NaturalLanguageRequest):
         logger.info(f"工作流生成完成，包含 {len(workflow.get('nodes', []))} 个节点")
         # 如果生成的工作流包含节点，说明需要工作流处理
         if workflow and workflow.get("nodes") and len(workflow["nodes"]) > 0:
-            engine = WorkflowEngine()
-            
-            # 从配置中获取并注册节点类型
-            node_manager = NodeConfigManager()
-            node_configs = node_manager.node_configs
-            
-            # 动态导入并注册节点
-            for class_name in node_configs.keys():
-                # 获取节点配置中定义的type
-                node_type = node_configs[class_name].get('type')
-                if not node_type:
-                    logger.warning(f"节点 {class_name} 未配置type字段，跳过注册")
-                    continue
-                    
-                # 从type生成模块名，例如：text_concat -> text_concat
-                module_name = node_type
-                
-                try:
-                    # 动态导入节点模块
-                    module = importlib.import_module(f"..nodes.{module_name}", package="workflow_engine.api")
-                    node_class = getattr(module, class_name)
-                    # 使用配置的type注册节点类型
-                    engine.register_node_type(node_type, node_class)
-                    logger.info(f"成功注册节点类型: {node_type}")
-                except Exception as e:
-                    logger.error(f"注册节点类型 {module_name} 失败: {str(e)}")
-                    raise
-            
+            # 使用全局engine实例执行工作流
             # 执行工作流
             logger.info("开始执行自然语言生成的工作流")
             workflow_json = json.dumps(workflow, indent=2)
