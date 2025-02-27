@@ -263,16 +263,3 @@ class WebContentExtractor:
                     logger.info("API调用成功")
                     result = await response.json()
                     return result["choices"][0]["message"]["content"]
-
-# 使用示例
-async def main():
-    extractor = WebContentExtractor()
-    result = await extractor.extract_content(
-        url="https://example.com",
-        output_dir="output"
-    )
-    print(result)
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
