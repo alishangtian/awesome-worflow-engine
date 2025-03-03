@@ -58,8 +58,8 @@ cp .env.example .env
 
 ```
 API_KEY=your_api_key_here
-MODEL_NAME=gpt-3.5-turbo
-BASE_URL=https://api.360.cn/v1
+MODEL_NAME=deepseek-chat
+BASE_URL=https://api.deepseek.com/v1
 ```
 
 ## 使用方法

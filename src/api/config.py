@@ -10,8 +10,8 @@ load_dotenv()
 
 API_CONFIG = {
     "api_key": os.getenv("API_KEY","API_KEY"),
-    "model_name": os.getenv("MODEL_NAME", "gpt-3.5-turbo"),
-    "base_url": os.getenv("BASE_URL", "https://api.360.cn/v1"),
+    "model_name": os.getenv("MODEL_NAME", "deepseek-chat"),
+    "base_url": os.getenv("BASE_URL", "https://api.deepseek.com/v1"),
     "doc_dir": os.getenv("DOC_DIR", "./docs"),
     "index_dir": os.getenv("INDEX_DIR", "./storage"),
     "long_context_model": os.getenv("LONG_CONTEXT_MODEL", "Doubao-pro-256k")

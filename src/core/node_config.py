@@ -18,7 +18,13 @@ class NodeConfigManager:
         if config_path is None:
             # 使用默认配置文件路径
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            config_path = os.path.join(current_dir, "../config/node_config.yaml")
+            # 首先尝试从nodes目录加载配置
+            nodes_config_path = os.path.join(current_dir, "../nodes/node_config.yaml")
+            if os.path.exists(nodes_config_path):
+                config_path = nodes_config_path
+            else:
+                # 如果nodes目录下没有配置文件，则使用原来的配置路径
+                config_path = os.path.join(current_dir, "../config/node_config.yaml")
         
         self.config_path = config_path
         self.node_configs = self._load_config()
@@ -57,7 +63,7 @@ class NodeConfigManager:
                 **config
             }
         return None
-    
+
     def get_all_nodes(self) -> List[Dict]:
         """
         获取所有节点的配置信息
@@ -107,11 +113,24 @@ class NodeConfigManager:
                     for param_name, param_info in params.items():
                         if not isinstance(param_info, dict):
                             continue
-                        optional = param_info.get("optional", False)
+                        
+                        # 获取参数的所有字段
+                        param_type = param_info.get("type", "unknown")
+                        required = param_info.get("required", False)
                         default = param_info.get("default", None)
-                        param_str = f"* {param_name}: {param_info.get('description', '无描述')}"
-                        if optional:
-                            param_str += f" (可选，默认值: {default})"
+                        description = param_info.get("description", "无描述")
+                        
+                        # 构建参数描述字符串
+                        param_str = f"* {param_name}: {description}"
+                        param_str += f" (类型: {param_type}"
+                        
+                        # 根据required字段决定是否显示default值
+                        if not required:
+                            param_str += f", 可选, 默认值: {default}"
+                        else:
+                            param_str += ", 必填"
+                            
+                        param_str += ")"
                         param_desc.append(param_str)
                     
                     # 构建输出描述

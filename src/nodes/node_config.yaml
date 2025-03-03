@@ -1,6 +1,33 @@
 # 节点配置文件
 # 定义所有可用的节点类型及其参数
 
+PythonExecuteNode:
+  type: "python_execute"
+  name: "Python函数执行"
+  description: "执行Python函数节点"
+  output:
+    result: "函数执行结果"
+    stdout: "标准输出内容"
+    stderr: "标准错误内容"
+    success: "执行是否成功"
+    function_name: "执行的函数名称"
+    error: "错误信息(如果有)"
+  params:
+    code:
+      type: "str"
+      required: true
+      description: "要执行的Python函数定义代码"
+    variables:
+      type: "dict"
+      required: false
+      default: {}
+      description: "函数执行的参数字典"
+    timeout:
+      type: "int"
+      required: false
+      default: 30
+      description: "执行超时时间(秒)"
+
 TextConcatNode:
   type: "text_concat"
   name: "文本拼接"
