@@ -3,7 +3,7 @@
 from typing import Dict, Any
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
 from llama_index.core.settings import Settings
-from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.embeddings.ollama  import OllamaEmbedding
 from llama_index.core.node_parser import SentenceSplitter 
 import shutil
 import os
@@ -15,7 +15,11 @@ class IndexBuildNode(BaseNode):
     
     def __init__(self):
         # 初始化默认配置
-        Settings.embed_model = OpenAIEmbedding(model="bge-m3",api_base="http://10.234.20.35:9997/v1")
+        Settings.embed_model = OllamaEmbedding(
+                                model_name="bge-large",
+                                base_url="http://10.234.20.35:11434",
+                                ollama_additional_kwargs={"mirostat": 0},
+                            )
         Settings.node_parser = SentenceSplitter(chunk_size=1024, chunk_overlap=200)
 
     async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:

@@ -1,10 +1,10 @@
 # 节点配置文件
 # 定义所有可用的节点类型及其参数
-
+# 每个节点类型包含type、name、description、output、params等字段
 PythonExecuteNode:
   type: "python_execute"
   name: "Python函数执行"
-  description: "执行Python函数节点"
+  description: "通用Python计算节点，支持执行自定义Python函数，可用于科学计算、数据处理、算法实现等多种场景。内置支持numpy、pandas等科学计算库，可实现复杂的数学运算、统计分析、数据转换等功能。"
   output:
     result: "函数执行结果"
     stdout: "标准输出内容"
@@ -16,17 +16,27 @@ PythonExecuteNode:
     code:
       type: "str"
       required: true
-      description: "要执行的Python函数定义代码"
+      description: "要执行的Python函数定义代码。支持以下场景：
+        1. 数学计算：可使用numpy进行矩阵运算、统计分析等
+        2. 数据处理：可使用pandas进行数据清洗、转换、分析等
+        3. 科学计算：支持scipy进行积分、优化、信号处理等
+        4. 算法实现：可实现排序、搜索、图论等算法
+        5. 文本处理：支持正则表达式、分词、编码转换等
+        6. 自定义计算：可实现任意自定义的计算逻辑"
     variables:
       type: "dict"
       required: false
       default: {}
-      description: "函数执行的参数字典"
+      description: "函数执行的参数字典，可传入各类数据类型：
+        1. 基础类型：数字、字符串、布尔值等
+        2. 复合类型：列表、字典、元组等
+        3. 特殊类型：日期时间、二进制数据等
+        4. 数据结构：DataFrame、ndarray等"
     timeout:
       type: "int"
       required: false
       default: 30
-      description: "执行超时时间(秒)"
+      description: "执行超时时间(秒)，用于控制长时间运算的超时限制"
 
 TextConcatNode:
   type: "text_concat"
@@ -104,29 +114,37 @@ MultiplyNode:
 ChatNode:
   type: "chat"
   name: "AI对话"
-  description: "AI对话节点"
+  description: "智能AI对话节点，基于大规模语言模型，支持自然语言理解、文本生成、知识问答等多种场景。可用于文本处理、内容生成、智能问答、数据分析等任务，支持上下文理解和多轮对话。"
   output:
-    response: "AI的回复内容"
+    response: "AI的回复内容，包括生成的文本、分析结果或处理后的数据"
   params:
     input:
       type: "str"
       required: true
-      description: "输入文本"
+      description: "输入文本，支持以下场景：
+        1. 自然语言问答：提供问题获取答案
+        2. 文本生成：创建文章、摘要、描述等
+        3. 代码生成：生成各种编程语言的代码
+        4. 数据分析：解析和分析文本数据
+        5. 文本转换：格式转换、翻译、改写等
+        6. 逻辑推理：进行推理、决策和问题解决"
     model:
       type: "str"
       required: false
       default: "alibaba/qwen-max-2025-01-25"
-      description: "使用的模型"
+      description: "使用的AI模型，不同模型具有不同的专长和性能特点"
     temperature:
       type: "float"
       required: false
       default: 0.7
-      description: "温度参数(0-1)"
+      description: "温度参数(0-1)，控制输出的随机性：
+        - 较低的值(接近0)：输出更确定、保守
+        - 较高的值(接近1)：输出更多样、创造性"
     max_tokens:
       type: "int"
       required: false
       default: 2000
-      description: "最大token数"
+      description: "最大生成token数，用于控制输出长度，避免过长回复"
 
 FileReadNode:
   type: "file_read"
@@ -273,44 +291,47 @@ TerminalNode:
       default: true
       description: "是否使用shell执行命令"
 
-IndexBuildNode:
-  type: "index_build"
-  name: "索引构建"
-  description: "LlamaIndex文档索引构建节点"
+SerperSearchNode:
+  type: "serper_search"
+  name: "Serper搜索"
+  description: "Serper搜索节点"
   output:
-    result: "构建结果(success/failed)"
-    doc_count: "处理的文档数量"
-    index_dir: "索引存储目录"
-    index_stats: "索引统计信息"
+    success: "搜索是否成功"
+    results: "搜索结果列表"
+    count: "结果数量"
+    error: "错误信息(如果有)"
   params:
-    clear_existing:
-      type: "bool"
-      required: false
-      default: false
-      description: "是否清理已有索引"
-
-IndexQueryNode:
-  type: "index_query"
-  name: "索引查询"
-  description: "LlamaIndex文档索引查询节点"
-  output:
-    result: "查询结果(success/failed)"
-    query: "查询内容"
-    answer: "AI回答内容"
-    sources: "引用的文档来源"
-    generation_info: "生成信息"
-  params:
-    query_str:
+    query:
       type: "str"
       required: true
-      description: "查询内容"
-    similarity_top_k:
-      type: "int"
-      required: false
-      default: 3
-      description: "返回结果数量"
-    response_mode:
+      description: "搜索关键词"
+    country:
       type: "str"
       required: false
-      default: "compact"
-      description: "响应模式"
+      default: "cn"
+      description: "搜索国家代码"
+    language:
+      type: "str"
+      required: false
+      default: "zh"
+      description: "搜索语言代码"
+
+DuckDuckGoSearchNode:
+  type: "duckduckgo_search"
+  name: "DuckDuckGo搜索"
+  description: "DuckDuckGo搜索节点"
+  output:
+    success: "搜索是否成功"
+    results: "搜索结果列表"
+    count: "结果数量"
+    error: "错误信息(如果有)"
+  params:
+    query:
+      type: "str"
+      required: true
+      description: "搜索关键词"
+    region:
+      type: "str"
+      required: false
+      default: "cn-zh"
+      description: "搜索地区和语言设置"

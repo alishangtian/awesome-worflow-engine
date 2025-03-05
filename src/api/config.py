@@ -1,33 +1,123 @@
-"""API配置"""
+"""API配置模块
+
+提供配置管理和工具函数
+"""
 
 import os
 from functools import wraps
-from typing import Any, Callable
+from typing import Any, Callable, Dict, TypeVar, Optional
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 # 加载环境变量
 load_dotenv()
 
-API_CONFIG = {
-    "api_key": os.getenv("API_KEY","API_KEY"),
-    "model_name": os.getenv("MODEL_NAME", "deepseek-chat"),
-    "base_url": os.getenv("BASE_URL", "https://api.deepseek.com/v1"),
-    "doc_dir": os.getenv("DOC_DIR", "./docs"),
-    "index_dir": os.getenv("INDEX_DIR", "./storage"),
-    "long_context_model": os.getenv("LONG_CONTEXT_MODEL", "Doubao-pro-256k")
-}
+class APIConfig(BaseModel):
+    """API配置模型"""
+    api_key: str = Field(
+        default=os.getenv("API_KEY", ""),
+        description="LLM API密钥"
+    )
+    model_name: str = Field(
+        default=os.getenv("MODEL_NAME", "deepseek-chat"),
+        description="默认使用的模型名称"
+    )
+    base_url: str = Field(
+        default=os.getenv("BASE_URL", "https://api.deepseek.com/v1"),
+        description="API基础URL"
+    )
+    request_timeout: int = Field(
+        default=int(os.getenv("REQUEST_TIMEOUT", "30")),
+        description="API请求超时时间(秒)"
+    )
+    max_retries: int = Field(
+        default=int(os.getenv("MAX_RETRIES", "3")),
+        description="API请求最大重试次数"
+    )
+    stream_chunk_size: int = Field(
+        default=int(os.getenv("STREAM_CHUNK_SIZE", "1024")),
+        description="流式响应的块大小"
+    )
+    serper_api_key: str = Field(
+        default=os.getenv("SERPER_API_KEY", ""),
+        description="Serper API密钥"
+    )
 
-def retry_on_error(max_retries: int = 3):
-    """重试装饰器"""
-    def decorator(func: Callable) -> Callable:
+# 创建全局配置实例
+API_CONFIG = APIConfig().model_dump()
+
+# 类型变量
+T = TypeVar('T')
+R = TypeVar('R')
+
+def retry_on_error(
+    max_retries: Optional[int] = None,
+    exceptions: tuple = (Exception,),
+    logger: Any = None
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    """重试装饰器
+    
+    Args:
+        max_retries: 最大重试次数，如果为None则使用配置中的值
+        exceptions: 需要重试的异常类型
+        logger: 日志记录器
+    
+    Returns:
+        装饰器函数
+    
+    Example:
+        @retry_on_error(max_retries=3)
+        async def my_function():
+            # 可能失败的操作
+            pass
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def wrapper(*args: Any, **kwargs: Any) -> T:
+            retries = max_retries or API_CONFIG['max_retries']
             last_error = None
-            for _ in range(max_retries):
+            
+            for attempt in range(retries):
                 try:
                     return await func(*args, **kwargs)
-                except Exception as e:
+                except exceptions as e:
                     last_error = e
-            raise last_error
+                    if logger:
+                        logger.warning(
+                            f"第{attempt + 1}次重试失败: {str(e)}, "
+                            f"剩余重试次数: {retries - attempt - 1}"
+                        )
+                    if attempt == retries - 1:
+                        if logger:
+                            logger.error(f"达到最大重试次数({retries}), 最后错误: {str(e)}")
+                        raise last_error
+            return None  # 类型检查需要
         return wrapper
     return decorator
+
+def validate_api_config() -> None:
+    """验证API配置的必要字段
+    
+    Raises:
+        ValueError: 当必要的配置项缺失时
+    """
+    if not API_CONFIG['api_key']:
+        raise ValueError(
+            "API密钥未配置! 请在.env文件中设置API_KEY环境变量"
+        )
+    
+    if not API_CONFIG['base_url']:
+        raise ValueError(
+            "API基础URL未配置! 请在.env文件中设置BASE_URL环境变量"
+        )
+
+def get_headers() -> Dict[str, str]:
+    """获取API请求头
+    
+    Returns:
+        包含认证信息的请求头字典
+    """
+    return {
+        "Authorization": f"Bearer {API_CONFIG['api_key']}",
+        "Content-Type": "application/json"
+    }

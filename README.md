@@ -1,255 +1,179 @@
-# Workflow Engine
+# Awesome Workflow Engine
 
-基于DAG的工作流执行引擎，支持多种节点类型和自然语言输入。
+基于DAG的工作流执行引擎，支持自然语言输入，可扩展的节点系统。
 
 ## 功能特点
 
-- 支持多种节点类型：
-  - 文本处理：连接、替换等
-  - 数学运算：加法、乘法等
-  - LLM对话：支持与大语言模型交互
-- 基于DAG的工作流执行
-- 节点间数据流转
+- 基于DAG（有向无环图）的工作流执行
+- 支持多种节点类型：文本处理、数学运算、LLM对话等
+- 支持节点间数据流转
 - 支持自然语言输入自动生成工作流
-- RESTful API接口
-- 异步执行
-- 错误重试机制
+- 提供REST API和Web界面
+- 支持流式执行和实时反馈
+- 可扩展的节点系统
 
-## 安装
+## 系统要求
+
+- Python 3.8+
+- FastAPI
+- NetworkX
+- aiohttp
+- 其他依赖见requirements.txt
+
+## 安装步骤
 
 1. 克隆仓库：
-
 ```bash
-git clone https://github.com/yourusername/workflow_engine.git
-cd workflow_engine
+git clone https://github.com/yourusername/awesome-workflow-engine.git
+cd awesome-workflow-engine
 ```
 
-2. 创建并激活虚拟环境（可选）：
-
+2. 安装依赖：
 ```bash
-python -m venv venv
-# Windows
-venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-3. 安装依赖：
+3. 配置环境变量：
+在项目根目录创建`.env`文件，添加以下配置：
+```env
+API_KEY=your_llm_api_key
+BASE_URL=your_llm_api_base_url
+MODEL_NAME=your_model_name
+```
 
+## 启动服务
+
+1. 启动API服务：
 ```bash
-pip install -e .
+uvicorn awesome_workflow_engine.api.main:app --reload --port 8000
 ```
 
-开发环境额外依赖：
-
-```bash
-pip install -e ".[dev]"
-```
-
-## 配置
-
-1. 复制环境变量示例文件：
-
-```bash
-cp .env.example .env
-```
-
-2. 编辑.env文件，设置必要的环境变量：
-
-```
-API_KEY=your_api_key_here
-MODEL_NAME=deepseek-chat
-BASE_URL=https://api.deepseek.com/v1
-```
-
-## 使用方法
-
-### 1. 启动服务
-
-```bash
-python -m workflow_engine.api.main
-```
-
-或者使用uvicorn：
-
-```bash
-uvicorn workflow_engine.api.main:app --reload
-```
-
-服务默认运行在 http://localhost:8000
-
-### 2. API接口
-
-#### 执行工作流
-
-```bash
-curl -X POST http://localhost:8000/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "workflow": {
-      "nodes": [
-        {
-          "id": "add1",
-          "type": "add",
-          "params": {"num1": 10, "num2": 20}
-        },
-        {
-          "id": "multiply1",
-          "type": "multiply",
-          "params": {
-            "num1": "$add1.result",
-            "num2": 2
-          }
-        }
-      ],
-      "edges": [
-        {"from": "add1", "to": "multiply1"}
-      ]
-    }
-  }'
-```
-
-#### 自然语言处理
-
-```bash
-curl -X POST http://localhost:8000/natural_language \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "计算(10+20)*2"
-  }'
-```
-
-### 3. 支持的节点类型
-
-#### 文本处理节点
-
-1. text_concat
-   - 参数：
-     - text1: 第一个文本
-     - text2: 第二个文本
-     - separator: 分隔符（可选）
-
-2. text_replace
-   - 参数：
-     - text: 原始文本
-     - old_str: 要替换的文本
-     - new_str: 替换成的文本
-
-#### 数学运算节点
-
-1. add
-   - 参数：
-     - num1: 第一个数字
-     - num2: 第二个数字
-
-2. multiply
-   - 参数：
-     - num1: 第一个数字
-     - num2: 第二个数字
-
-#### LLM对话节点
-
-1. chat
-   - 参数：
-     - input: 输入文本
-     - model: 模型名称（可选）
-     - temperature: 温度参数（可选）
-
-### 4. 工作流示例
-
-#### 文本处理工作流
-
-```json
-{
-  "workflow": {
-    "nodes": [
-      {
-        "id": "concat1",
-        "type": "text_concat",
-        "params": {
-          "text1": "Hello",
-          "text2": "World",
-          "separator": " "
-        }
-      },
-      {
-        "id": "replace1",
-        "type": "text_replace",
-        "params": {
-          "text": "$concat1.result",
-          "old_str": "World",
-          "new_str": "Python"
-        }
-      }
-    ],
-    "edges": [
-      {"from": "concat1", "to": "replace1"}
-    ]
-  }
-}
-```
-
-#### 数学计算工作流
-
-```json
-{
-  "workflow": {
-    "nodes": [
-      {
-        "id": "add1",
-        "type": "add",
-        "params": {
-          "num1": 10,
-          "num2": 20
-        }
-      },
-      {
-        "id": "multiply1",
-        "type": "multiply",
-        "params": {
-          "num1": "$add1.result",
-          "num2": 2
-        }
-      }
-    ],
-    "edges": [
-      {"from": "add1", "to": "multiply1"}
-    ]
-  }
-}
-```
+2. 访问Web界面：
+打开浏览器访问 http://localhost:8000
 
 ## API文档
 
-启动服务后访问：http://localhost:8000/docs
+启动服务后访问 http://localhost:8000/docs 查看完整的API文档。
 
-## 开发
+### 主要接口
 
-### 运行测试
+1. 流式处理接口
+```http
+GET /stream?text=your_input_text
+```
+将自然语言输入转换为工作流并执行，以SSE方式流式返回结果。
 
-```bash
-pytest
+2. 执行工作流接口
+```http
+POST /execute_workflow
+Content-Type: application/json
+
+{
+    "workflow": {
+        "nodes": [...],
+        "edges": [...]
+    },
+    "global_params": {}
+}
 ```
 
-### 代码格式化
+## 工作流示例
 
-```bash
-black .
-isort .
+### 1. 数学运算工作流
+```json
+{
+    "workflow": {
+        "nodes": [
+            {
+                "id": "add1",
+                "type": "add",
+                "params": {"num1": 10, "num2": 20}
+            },
+            {
+                "id": "multiply1",
+                "type": "multiply",
+                "params": {
+                    "num1": "$add1.result",
+                    "num2": 2
+                }
+            }
+        ],
+        "edges": [
+            {"from": "add1", "to": "multiply1"}
+        ]
+    }
+}
 ```
 
-### 类型检查
+### 2. 自然语言示例
+发送请求：`"计算(10+20)*2"`
+系统会自动生成并执行上述工作流。
 
-```bash
-mypy .
+## 自定义节点
+
+1. 在`nodes`目录下创建新的节点类：
+```python
+from awesome_workflow_engine.nodes.base import BaseNode
+
+class MyCustomNode(BaseNode):
+    def execute(self, params):
+        # 实现节点逻辑
+        return {"result": ...}
 ```
 
-### 代码风格检查
-
-```bash
-flake8
+2. 在`node_config.json`中注册节点：
+```json
+{
+    "MyCustomNode": {
+        "type": "custom",
+        "description": "自定义节点描述",
+        "params": {
+            "param1": {"type": "string", "description": "参数1说明"},
+            "param2": {"type": "number", "description": "参数2说明"}
+        }
+    }
+}
 ```
+
+## 项目结构
+
+```
+awesome-workflow-engine/
+├── src/
+│   ├── api/                # API相关代码
+│   │   ├── main.py        # FastAPI应用
+│   │   └── config.py      # API配置
+│   ├── core/              # 核心实现
+│   │   ├── engine.py      # 工作流引擎
+│   │   └── node_config.py # 节点配置管理
+│   └── nodes/             # 节点实现
+│       ├── base.py        # 基础节点类
+│       ├── math/          # 数学运算节点
+│       └── text/          # 文本处理节点
+├── static/                # 静态文件
+│   └── index.html        # Web界面
+├── tests/                 # 测试用例
+├── requirements.txt       # 项目依赖
+└── README.md             # 项目文档
+```
+
+## 开发计划
+
+- [ ] 支持更多节点类型
+- [ ] 添加节点执行超时机制
+- [ ] 支持工作流模板
+- [ ] 添加工作流可视化编辑器
+- [ ] 支持工作流历史记录和重放
+- [ ] 添加更多单元测试
+
+## 贡献指南
+
+1. Fork 项目
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交改动 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 创建Pull Request
 
 ## 许可证
 
-MIT License
+MIT License - 详见 [LICENSE](LICENSE) 文件

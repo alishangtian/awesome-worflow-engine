@@ -32,15 +32,120 @@ document.addEventListener('DOMContentLoaded', () => {
         sendMessage();
         scrollToBottom();
     });
+    
     userInput.addEventListener('keypress', e => {
         if (e.key === 'Enter') {
             sendMessage();
             scrollToBottom();
         }
     });
-    
+
+    // 重置UI
+    function resetUI() {
+        userInput.value = '';
+        userInput.disabled = false;
+        sendButton.disabled = false;
+        userInput.focus();
+    }
+
+    // 渲染节点结果
+    function renderNodeResult(data, container) {
+        // 根据状态设置样式类和文本
+        let statusClass = '';
+        let statusText = '';
+        let content = '';
+        
+        // 首先检查error是否存在
+        if (data.error) {
+            statusClass = 'error';
+            statusText = '执行失败';
+            content = `<div class="error">${data.error}</div>`;
+        } else {
+            // 如果没有error，则根据status判断
+            switch(data.status) {
+                case 'running':
+                    statusClass = 'running';
+                    statusText = '执行中';
+                    content = '<div class="running-indicator"></div>';
+                    break;
+                case 'completed':
+                    statusClass = 'success';
+                    statusText = '执行完成';
+                    content = data.data ? `<pre>${JSON.stringify(data.data, null, 2)}</pre>` : '';
+                    break;
+                default:
+                    statusClass = '';
+                    statusText = data.status || '未知状态';
+                    content = '';
+            }
+        }
+        
+        // 查找是否已存在相同节点的div
+        const existingNode = container.querySelector(`[data-node-id="${data.node_id}"]`);
+        if (existingNode) {
+            // 更新现有节点
+            existingNode.className = `node-result ${statusClass}`;
+            existingNode.innerHTML = `
+                <div class="node-header">
+                    <span>节点: ${data.node_id}</span>
+                    <span>${statusText}</span>
+                </div>
+                <div class="node-content">${content}</div>
+            `;
+        } else {
+            // 创建新节点
+            const nodeDiv = document.createElement('div');
+            nodeDiv.className = `node-result ${statusClass}`;
+            nodeDiv.setAttribute('data-node-id', data.node_id);
+            nodeDiv.innerHTML = `
+                <div class="node-header">
+                    <span>节点: ${data.node_id}</span>
+                    <span>${statusText}</span>
+                </div>
+                <div class="node-content">${content}</div>
+            `;
+            container.appendChild(nodeDiv);
+        }
+    }
+
+    // 渲染解释说明
+    function renderExplanation(content, container) {
+        // 查找或创建explanation div
+        let explanationDiv = container.querySelector('.explanation');
+        if (!explanationDiv) {
+            explanationDiv = document.createElement('div');
+            explanationDiv.className = 'explanation';
+            container.appendChild(explanationDiv);
+        }
+        // 使用累积的内容更新div
+        const htmlContent = converter.makeHtml(content);
+        explanationDiv.innerHTML = htmlContent;
+    }
+
+    // 渲染回答
+    function renderAnswer(content, container) {
+        // 查找或创建answer div
+        let answerDiv = container.querySelector('.answer:last-child');
+        if (!answerDiv) {
+            answerDiv = document.createElement('div');
+            answerDiv.className = 'answer';
+            container.appendChild(answerDiv);
+        }
+        // 使用累积的内容更新div
+        const htmlContent = converter.makeHtml(content);
+        answerDiv.innerHTML = htmlContent;
+    }
+
+    // 初始化Markdown转换器
+    const converter = new showdown.Converter({
+        tables: true,
+        tasklists: true,
+        strikethrough: true,
+        emoji: true
+    });
+
     // 发送消息
-    function sendMessage() {
+    async function sendMessage() {
         const text = userInput.value.trim();
         if (!text) return;
         
@@ -63,215 +168,138 @@ document.addEventListener('DOMContentLoaded', () => {
         currentExplanation = '';
         currentAnswer = '';
 
-        // 创建SSE连接
-        const eventSource = new EventSource(`stream?text=${encodeURIComponent(text)}`);
-        
-        // 超时处理
-        const timeoutId = setTimeout(() => {
-            eventSource.close();
-            answerElement.innerHTML += `<div class="error">请求超时</div>`;
-            resetUI();
-        }, 60000);
-        
-        // 处理状态消息
-        eventSource.addEventListener('status', event => {
-            console.log("status \n"+event.data);
-            const message = event.data;
-            const statusDiv = document.createElement('div');
-            statusDiv.className = 'status-message';
-            statusDiv.textContent = message;
-            answerElement.appendChild(statusDiv);
-        });
-
-        // 处理工作流事件
-        eventSource.addEventListener('workflow', event => {
-            try {
-                const workflow = JSON.parse(event.data);                    
-                console.log("workflow \n"+workflow);
-                const workflowDiv = document.createElement('div');
-                workflowDiv.className = 'workflow-info';
-                workflowDiv.innerHTML = `
-                    <div>工作流已生成: ${workflow.nodes.length} 个节点</div>
-                    <pre>${JSON.stringify(workflow, null, 2)}</pre>
-                `;
-                answerElement.appendChild(workflowDiv);
-            } catch {
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'error';
-                errorDiv.textContent = '解析工作流失败';
-                answerElement.appendChild(errorDiv);
-            }
-        });
-
-        // 处理节点结果
-        eventSource.addEventListener('node_result', event => {
-            try {
-                const data = JSON.parse(event.data); 
-                console.log("node_result \n"+data);
-                renderNodeResult(data, answerElement);
-            } catch {
-                answerElement.innerHTML += `<div class="error">解析节点结果失败</div>`;
-            }
-        });
-
-        // 渲染节点结果
-        function renderNodeResult(data, container) {
-            const statusClass = data.success ? 'success' : 'error';
-            const content = data.success 
-                ? `<pre>${JSON.stringify(data.data, null, 2)}</pre>`
-                : `<div class="error">${data.error}</div>`;
+        try {
+            // 先发送POST请求创建chat会话
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text })
+            });
             
-            const nodeDiv = document.createElement('div');
-            nodeDiv.className = `node-result ${statusClass}`;
-            nodeDiv.innerHTML = `
-                <div class="node-header">
-                    <span>节点: ${data.node_id}</span>
-                    <span>${data.success ? '成功' : '失败'}</span>
-                </div>
-                <div class="node-content">${content}</div>
-            `;
-            container.appendChild(nodeDiv);
-        }
-
-        // 初始化Markdown转换器
-        const converter = new showdown.Converter({
-            tables: true,
-            tasklists: true,
-            strikethrough: true,
-            emoji: true
-        });
-
-        // 处理解释说明
-        eventSource.addEventListener('explanation', event => {
-            try {
-                const content = JSON.parse(event.data);
-                // 累积解释内容
-                currentExplanation += content.data;
-                renderExplanation(currentExplanation, answerElement);
-            } catch {
-                answerElement.innerHTML += `<div class="error">解析解释说明失败</div>`;
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-        });
-
-        // 处理直接回答
-        eventSource.addEventListener('answer', event => {
-            try {
-                const content = JSON.parse(event.data);
-                // 累积回答内容
-                currentAnswer += content.data;
-                renderAnswer(currentAnswer, answerElement);
-            } catch {
-                answerElement.innerHTML += `<div class="error">解析回答失败</div>`;
+            
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || '创建会话失败');
             }
-        });
-
-        // 渲染解释说明
-        function renderExplanation(content, container) {
-            // 查找或创建explanation div
-            let explanationDiv = container.querySelector('.explanation');
-            if (!explanationDiv) {
-                explanationDiv = document.createElement('div');
-                explanationDiv.className = 'explanation';
-                container.appendChild(explanationDiv);
-            }
-            // 使用累积的内容更新div
-            const htmlContent = converter.makeHtml(content);
-            explanationDiv.innerHTML = htmlContent;
-        }
-
-        // 渲染回答
-        function renderAnswer(content, container) {
-            // 查找或创建answer div
-            let answerDiv = container.querySelector('.answer:last-child');
-            if (!answerDiv) {
-                answerDiv = document.createElement('div');
-                answerDiv.className = 'answer';
-                container.appendChild(answerDiv);
-            }
-            // 使用累积的内容更新div
-            const htmlContent = converter.makeHtml(content);
-            answerDiv.innerHTML = htmlContent;
-        }
-
-        // 处理完成事件
-        eventSource.addEventListener('complete', event => {
-            try {
+            
+            // 使用返回的chat_id建立SSE连接
+            const eventSource = new EventSource(`stream/${result.chat_id}`);
+            
+            // 超时处理
+            const timeoutId = setTimeout(() => {
+                eventSource.close();
+                answerElement.innerHTML += `<div class="error">请求超时</div>`;
+                resetUI();
+            }, 60000);
+            
+            // 处理状态消息
+            eventSource.addEventListener('status', event => {
                 const message = event.data;
-                const completeDiv = document.createElement('div');
-                completeDiv.className = 'complete';
-                completeDiv.innerHTML = `<div>${message}</div>`;
-                answerElement.appendChild(completeDiv);
-            } catch {
+                const statusDiv = document.createElement('div');
+                statusDiv.className = 'status-message';
+                statusDiv.textContent = message;
+                answerElement.appendChild(statusDiv);
+            });
+
+            // 处理工作流事件
+            eventSource.addEventListener('workflow', event => {
+                try {
+                    const workflow = JSON.parse(event.data);
+                    const workflowDiv = document.createElement('div');
+                    workflowDiv.className = 'workflow-info';
+                    workflowDiv.innerHTML = `
+                        <div>工作流已生成: ${workflow.nodes.length} 个节点</div>
+                        <pre>${JSON.stringify(workflow, null, 2)}</pre>
+                    `;
+                    answerElement.appendChild(workflowDiv);
+                } catch (error) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'error';
+                    errorDiv.textContent = '解析工作流失败';
+                    answerElement.appendChild(errorDiv);
+                }
+            });
+
+            // 处理节点结果
+            eventSource.addEventListener('node_result', event => {
+                try {
+                    const result = JSON.parse(event.data);
+                    renderNodeResult(result, answerElement);
+                } catch (error) {
+                    answerElement.innerHTML += `<div class="error">解析节点结果失败</div>`;
+                }
+            });
+
+            // 处理解释说明
+            eventSource.addEventListener('explanation', event => {
+                try {
+                    const response = JSON.parse(event.data);
+                    if (response.success && response.data) {
+                        currentExplanation += response.data;
+                        renderExplanation(currentExplanation, answerElement);
+                    } else if (!response.success) {
+                        answerElement.innerHTML += `<div class="error">${response.error || '解析解释说明失败'}</div>`;
+                    }
+                } catch (error) {
+                    answerElement.innerHTML += `<div class="error">解析解释说明失败</div>`;
+                }
+            });
+
+            // 处理直接回答
+            eventSource.addEventListener('answer', event => {
+                try {
+                    const response = JSON.parse(event.data);
+                    if (response.success && response.data) {
+                        currentAnswer += response.data;
+                        renderAnswer(currentAnswer, answerElement);
+                    } else if (!response.success) {
+                        answerElement.innerHTML += `<div class="error">${response.error || '解析回答失败'}</div>`;
+                    }
+                } catch (error) {
+                    answerElement.innerHTML += `<div class="error">解析回答失败</div>`;
+                }
+            });
+
+            // 处理完成事件
+            eventSource.addEventListener('complete', event => {
+                try {
+                    const result = event.data;
+                    const message = result || '完成';
+                    const completeDiv = document.createElement('div');
+                    completeDiv.className = 'complete';
+                    completeDiv.innerHTML = `<div>${message}</div>`;
+                    answerElement.appendChild(completeDiv);
+                } catch (error) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'error';
+                    errorDiv.textContent = '解析完成事件失败';
+                    answerElement.appendChild(errorDiv);
+                }
+                eventSource.close();
+                clearTimeout(timeoutId);
+                resetUI();
+            });
+
+            // 处理错误
+            eventSource.onerror = () => {
+                eventSource.close();
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'error';
-                errorDiv.textContent = '解析完成事件失败';
+                errorDiv.textContent = '连接错误';
                 answerElement.appendChild(errorDiv);
-            }
-            eventSource.close();
-            clearTimeout(timeoutId);
+                clearTimeout(timeoutId);
+                resetUI();
+            };
+
+        } catch (error) {
+            console.error('发送消息失败:', error);
+            answerElement.innerHTML += `<div class="error">发送消息失败: ${error.message}</div>`;
             resetUI();
-        });
-
-        // 添加非流式工作流执行函数
-        async function executeWorkflow(workflow, globalParams = {}) {
-            try {
-                const response = await fetch('/execute_workflow', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        workflow: workflow,
-                        global_params: globalParams
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const result = await response.json();
-                
-                // 渲染工作流
-                answerElement.innerHTML += `
-                    <div class="workflow-info">
-                        <div>工作流已生成: ${result.workflow.nodes.length} 个节点</div>
-                        <pre>${JSON.stringify(result.workflow, null, 2)}</pre>
-                    </div>`;
-
-                // 渲染所有事件
-                result.events.forEach(event => {
-                    if (event.node_id) {
-                        renderNodeResult(event, answerElement);
-                    } else {
-                        renderExplanation(event, answerElement);
-                    }
-                });
-
-                return result;
-            } catch (error) {
-                answerElement.innerHTML += `<div class="error">执行工作流失败: ${error.message}</div>`;
-                throw error;
-            }
-        }
-        
-        // 处理错误
-        eventSource.onerror = () => {
-            eventSource.close();
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error';
-            errorDiv.textContent = '连接错误';
-            answerElement.appendChild(errorDiv);
-            clearTimeout(timeoutId);
-            resetUI();
-        };
-        
-        // 重置UI
-        function resetUI() {
-            userInput.value = '';
-            userInput.disabled = false;
-            sendButton.disabled = false;
-            userInput.focus();
         }
     }
 });

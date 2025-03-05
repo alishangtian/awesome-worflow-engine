@@ -1,15 +1,20 @@
-"""工作流引擎核心实现"""
-
 import json
 import asyncio
 import concurrent.futures
-from typing import Dict, Any, Optional, Type, Set, List, Callable
+from typing import Dict, Any, Optional, Type, Set, List, Callable, AsyncGenerator, Tuple
 from dataclasses import dataclass
 from enum import Enum
 import networkx as nx
 from concurrent.futures import ThreadPoolExecutor
 
 from ..nodes.base import BaseNode
+
+class NodeStatus(Enum):
+    """节点状态"""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 class WorkflowStatus(Enum):
     """工作流状态"""
@@ -24,6 +29,7 @@ class WorkflowStatus(Enum):
 class NodeResult:
     """节点执行结果"""
     success: bool
+    status: NodeStatus
     data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     start_time: Optional[float] = None
@@ -118,30 +124,53 @@ class WorkflowEngine:
         """
         self._node_callbacks.append(callback)
 
-    def _notify_node_completion(self, workflow_id: str, node_id: str, result: NodeResult):
+    def _notify_node_completion(self, workflow_id: str, node_id: str, result: NodeResult) -> Dict[str, Any]:
         """通知节点执行完成
         
         Args:
             workflow_id: 工作流ID
             node_id: 节点ID
             result: 节点执行结果
+            
+        Returns:
+            Dict[str, Any]: 回调函数返回的结果
         """
+        # 先尝试执行回调函数
         for callback in self._node_callbacks:
             try:
-                callback(workflow_id, node_id, result)
+                callback_result = callback(workflow_id, node_id, result)
+                if callback_result:
+                    return callback_result
             except Exception as e:
                 print(f"回调函数执行失败: {str(e)}")
+        
+        # 如果没有回调函数或都失败了，返回默认结果
+        return {
+            "node_id": node_id,  # node_id来自方法参数
+            "success": result.success,
+            "status": result.status.value,
+            "data": result.data if result.success else None,
+            "error": result.error if not result.success else None
+        }
 
     async def execute_node(
         self,
         node: Dict,
         processed_params: Dict[str, Any],
         workflow_id: str
-    ) -> NodeResult:
-        """执行单个节点"""
+    ) -> AsyncGenerator[NodeResult, None]:
+        """执行单个节点，支持流式返回结果"""
         import time
         
         start_time = time.time()
+        # 创建初始结果并通知状态为运行中
+        initial_result = NodeResult(
+            success=True,
+            status=NodeStatus.RUNNING,
+            start_time=start_time
+        )
+        yield initial_result
+
         try:
             node_class = self._node_types[node["type"]]
             node_instance = node_class()
@@ -149,43 +178,70 @@ class WorkflowEngine:
             # 使用线程池执行节点
             loop = asyncio.get_event_loop()
             if asyncio.iscoroutinefunction(node_instance.execute):
-                # 如果是异步方法，在线程池中等待其完成
-                result = await loop.run_in_executor(
-                    self._thread_pool,
-                    lambda: asyncio.run(node_instance.execute(processed_params))
-                )
+                # 如果是异步生成器方法，直接获取结果流
+                if hasattr(node_instance.execute, '__aiter__'):
+                    async for intermediate_result in node_instance.execute(processed_params):
+                        # 创建中间结果
+                        running_result = NodeResult(
+                            success=True,
+                            status=NodeStatus.RUNNING,
+                            data=intermediate_result,
+                            start_time=start_time
+                        )
+                        yield running_result
+                        result = intermediate_result
+                else:
+                    # 如果是普通异步方法，在线程池中等待其完成
+                    result = await node_instance.execute(processed_params)
             else:
-                # 如果是同步方法，直接在线程池中执行
-                result = await loop.run_in_executor(
-                    self._thread_pool,
-                    lambda: node_instance.execute(processed_params)
-                )
+                # 如果是同步方法，检查是否是生成器
+                if hasattr(node_instance.execute, '__iter__'):
+                    # 同步生成器方法
+                    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                    try:
+                        for intermediate_result in await loop.run_in_executor(
+                            executor,
+                            lambda: list(node_instance.execute(processed_params))
+                        ):
+                            # 创建中间结果
+                            running_result = NodeResult(
+                                success=True,
+                                status=NodeStatus.RUNNING,
+                                data=intermediate_result,
+                                start_time=start_time
+                            )
+                            yield running_result
+                            result = intermediate_result
+                    finally:
+                        executor.shutdown(wait=False)
+                else:
+                    # 普通同步方法
+                    result = await loop.run_in_executor(
+                        self._thread_pool,
+                        node_instance.execute,
+                        processed_params
+                    )
             
             end_time = time.time()
-            node_result = NodeResult(
+            final_result = NodeResult(
                 success=True,
-                data=result,
+                status=NodeStatus.COMPLETED,
+                data=result if 'result' in locals() else None,
                 start_time=start_time,
                 end_time=end_time
             )
-            # 创建执行结果
-            duration = end_time - start_time
-            # 通知节点执行完成
-            self._notify_node_completion(workflow_id, node["id"], node_result)
-            return node_result
+            yield final_result
+
         except Exception as e:
             end_time = time.time()
-            node_result = NodeResult(
+            error_result = NodeResult(
                 success=False,
+                status=NodeStatus.FAILED,
                 error=str(e),
                 start_time=start_time,
                 end_time=end_time
             )
-            # 创建错误结果
-            duration = end_time - start_time
-            # 通知节点执行完成
-            self._notify_node_completion(workflow_id, node["id"], node_result)
-            return node_result
+            yield error_result
             
     async def _check_workflow_status(self, workflow_id: str) -> bool:
         """检查工作流状态
@@ -223,6 +279,7 @@ class WorkflowEngine:
             if dep_id not in results or not results[dep_id].success:
                 results[node_id] = NodeResult(
                     success=False,
+                    status=NodeStatus.FAILED,
                     error="依赖节点执行失败"
                 )
                 self._workflow_progress[workflow_id] = results.copy()
@@ -234,7 +291,7 @@ class WorkflowEngine:
         params: Dict[str, Any],
         results: Dict[str, NodeResult]
     ) -> Dict[str, Any]:
-        """处理节点参数
+        """处理节点参数，支持嵌套参数和表达式替换
         
         Args:
             params: 原始参数
@@ -242,17 +299,61 @@ class WorkflowEngine:
             
         Returns:
             Dict[str, Any]: 处理后的参数
+            
+        Examples:
+            >>> params = {
+            ...     "text": "Search for $node1.query about $node2.topic",
+            ...     "config": {
+            ...         "source": "$node3.data_source",
+            ...         "filters": ["$node4.filter1", "$node4.filter2"]
+            ...     }
+            ... }
         """
-        processed_params = {}
-        for key, value in params.items():
-            if isinstance(value, str) and value.startswith("$"):
-                ref_parts = value[1:].split(".")
-                ref_node = ref_parts[0]
-                ref_key = ref_parts[1]
-                processed_params[key] = results[ref_node].data[ref_key]
-            else:
-                processed_params[key] = value
-        return processed_params
+        import re
+        
+        def replace_expression(value: str) -> str:
+            """替换字符串中的所有参数表达式"""
+            pattern = r'\$([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)'
+            
+            def replace(match):
+                node_id = match.group(1)
+                param_key = match.group(2)
+                if node_id not in results:
+                    raise ValueError(f"引用了未执行的节点: {node_id}")
+                if not results[node_id].data:
+                    raise ValueError(f"节点 {node_id} 没有返回数据")
+                if param_key not in results[node_id].data:
+                    raise ValueError(f"节点 {node_id} 的结果中不存在参数: {param_key}")
+                return str(results[node_id].data[param_key])
+                
+            return re.sub(pattern, replace, value)
+            
+        def process_value(value: Any) -> Any:
+            """递归处理参数值"""
+            if isinstance(value, str):
+                # 处理完整的参数引用 (如 "$node1.param")
+                if value.startswith("$") and "." in value and not " " in value:
+                    ref_parts = value[1:].split(".")
+                    ref_node = ref_parts[0]
+                    ref_key = ref_parts[1]
+                    if ref_node not in results:
+                        raise ValueError(f"引用了未执行的节点: {ref_node}")
+                    if not results[ref_node].data:
+                        raise ValueError(f"节点 {ref_node} 没有返回数据")
+                    if ref_key not in results[ref_node].data:
+                        raise ValueError(f"节点 {ref_node} 的结果中不存在参数: {ref_key}")
+                    return results[ref_node].data[ref_key]
+                # 处理包含参数表达式的字符串
+                elif "$" in value:
+                    return replace_expression(value)
+                return value
+            elif isinstance(value, dict):
+                return {k: process_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [process_value(item) for item in value]
+            return value
+            
+        return {key: process_value(value) for key, value in params.items()}
 
     def _get_downstream_nodes(
         self,
@@ -311,15 +412,21 @@ class WorkflowEngine:
         # 处理参数
         processed_params = self._process_params(node["params"], results)
             
-        # 执行节点
-        result = await self.execute_node(node, processed_params, workflow_id)
-        results[node_id] = result
-        
-        # 更新工作流进度
-        self._workflow_progress[workflow_id] = results.copy()
+        # 执行节点并处理中间结果
+        final_result = None
+        async for result in self.execute_node(node, processed_params, workflow_id):
+            # 更新最新结果
+            results[node_id] = result
+            # 更新工作流进度
+            self._workflow_progress[workflow_id] = results.copy()
+            # 通知节点状态更新
+            self._notify_node_completion(workflow_id, node_id, result)
+            # 保存最终结果
+            if result.status in [NodeStatus.COMPLETED, NodeStatus.FAILED]:
+                final_result = result
         
         # 处理下游节点
-        if result.success:
+        if final_result and final_result.success:
             downstream_nodes = self._get_downstream_nodes(
                 node_id, nodes, dependencies, results
             )
@@ -336,65 +443,6 @@ class WorkflowEngine:
             if tasks:
                 await asyncio.gather(*tasks)
 
-    async def execute_workflow_stream(
-        self,
-        workflow_json: str,
-        workflow_id: str,
-        global_params: Optional[Dict[str, Any]] = None
-    ):
-        """流式执行工作流
-        
-        Args:
-            workflow_json: 工作流JSON定义
-            workflow_id: 工作流ID
-            global_params: 全局参数
-            
-        Yields:
-            Tuple[str, NodeResult]: 节点ID和执行结果的元组
-        """
-        workflow = json.loads(workflow_json)
-        
-        # 验证工作流
-        self.validate_workflow(workflow)
-        
-        nodes = workflow["nodes"]
-        edges = workflow["edges"]
-        
-        # 构建节点依赖图
-        dependencies: Dict[str, Set[str]] = {node["id"]: set() for node in nodes}
-        for edge in edges:
-            dependencies[edge["to"]].add(edge["from"])
-            
-        # 初始化工作流状态
-        self._workflow_status[workflow_id] = WorkflowStatus.RUNNING
-        results: Dict[str, NodeResult] = {}
-        
-        try:
-            # 获取没有依赖的起始节点和孤立节点
-            start_nodes = []
-            for node in nodes:
-                node_id = node["id"]
-                if not dependencies[node_id] or not any(
-                    edge["from"] == node_id or edge["to"] == node_id 
-                    for edge in edges
-                ):
-                    start_nodes.append(node)
-            
-            # 串行执行节点以支持流式输出
-            for node in start_nodes:
-                async for node_id, node_result in self._process_node_stream(node, workflow_id, dependencies, nodes, results):
-                    yield node_id, node_result
-            
-            # 更新工作流状态
-            if all(result.success for result in results.values()):
-                self._workflow_status[workflow_id] = WorkflowStatus.COMPLETED
-            else:
-                self._workflow_status[workflow_id] = WorkflowStatus.FAILED
-                
-        except Exception as e:
-            self._workflow_status[workflow_id] = WorkflowStatus.FAILED
-            raise
-
     async def _process_node_stream(
         self,
         node: Dict,
@@ -402,7 +450,7 @@ class WorkflowEngine:
         dependencies: Dict[str, Set[str]],
         nodes: List[Dict],
         results: Dict[str, NodeResult]
-    ):
+    ) -> AsyncGenerator[Tuple[str, NodeResult], None]:
         """流式处理单个节点
         
         Args:
@@ -428,39 +476,59 @@ class WorkflowEngine:
         # 处理参数
         processed_params = self._process_params(node["params"], results)
             
-        # 执行节点
-        result = await self.execute_node(node, processed_params, workflow_id)
-        results[node_id] = result
-        # 更新工作流进度
-        self._workflow_progress[workflow_id] = results.copy()
-        yield node_id, result
-        
-        # 处理下游节点
-        if result.success:
-            downstream_nodes = self._get_downstream_nodes(
-                node_id, nodes, dependencies, results
-            )
-            for n in downstream_nodes:
-                async for downstream_id, downstream_result in self._process_node_stream(
-                    n, workflow_id, dependencies, nodes, results
-                ):
-                    yield downstream_id, downstream_result
+        # 执行节点并处理中间结果
+        running_status_sent = False
+        async for result in self.execute_node(node, processed_params, workflow_id):
+            # 更新最新结果
+            if result.status == NodeStatus.RUNNING:
+                if not running_status_sent:
+                    running_status_sent = True
+                    results[node_id] = result
+                    # 更新工作流进度
+                    self._workflow_progress[workflow_id] = results.copy()
+                    # 通知节点状态更新并返回结果
+                    self._notify_node_completion(workflow_id, node_id, result)
+                    yield node_id, result
+                # 如果已经发送过 RUNNING 状态，只更新数据
+                elif result.data:
+                    results[node_id].data = result.data
+            else:
+                # 对于非 RUNNING 状态（COMPLETED/FAILED），正常处理
+                results[node_id] = result
+                # 更新工作流进度
+                self._workflow_progress[workflow_id] = results.copy()
+                # 通知节点状态更新并返回结果
+                self._notify_node_completion(workflow_id, node_id, result)
+                yield node_id, result
+                
+            # 如果节点执行完成且成功，处理下游节点
+            if result.status == NodeStatus.COMPLETED and result.success:
+                downstream_nodes = self._get_downstream_nodes(
+                    node_id, nodes, dependencies, results
+                )
+                
+                # 直接处理下游节点
+                for n in downstream_nodes:
+                    async for node_result in self._process_node_stream(
+                        n, workflow_id, dependencies, nodes, results
+                    ):
+                        yield node_result
 
-    async def execute_workflow(
+    async def execute_workflow_stream(
         self,
         workflow_json: str,
         workflow_id: str,
         global_params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, NodeResult]:
-        """执行工作流
+    ) -> AsyncGenerator[Tuple[str, NodeResult], None]:
+        """流式执行工作流
         
         Args:
             workflow_json: 工作流JSON定义
             workflow_id: 工作流ID
             global_params: 全局参数
             
-        Returns:
-            Dict[str, NodeResult]: 节点执行结果
+        Yields:
+            Tuple[str, NodeResult]: 节点ID和执行结果的元组
         """
         workflow = json.loads(workflow_json)
         
@@ -477,33 +545,128 @@ class WorkflowEngine:
             
         # 初始化工作流状态
         self._workflow_status[workflow_id] = WorkflowStatus.RUNNING
+        self._workflow_progress[workflow_id] = {}
         results: Dict[str, NodeResult] = {}
         
         try:
-            # 获取没有依赖的起始节点和孤立节点
-            start_nodes = []
-            for node in nodes:
-                node_id = node["id"]
-                if not dependencies[node_id] or not any(
-                    edge["from"] == node_id or edge["to"] == node_id 
-                    for edge in edges
-                ):
-                    start_nodes.append(node)
+            # 获取入口节点（没有入度的节点）
+            entry_nodes = [
+                node for node in nodes
+                if not dependencies[node["id"]]
+            ]
             
-            # 并行执行起始节点
-            await asyncio.gather(
-                *(self._process_node(node, workflow_id, dependencies, nodes, results)
-                  for node in start_nodes)
+            # 处理入口节点
+            for node in entry_nodes:
+                # 创建异步生成器任务
+                async for node_result in self._process_node_stream(
+                    node,
+                    workflow_id,
+                    dependencies,
+                    nodes,
+                    results
+                ):
+                    yield node_result
+                    
+            # 检查是否所有节点都执行成功
+            all_success = all(
+                node["id"] in results and results[node["id"]].success
+                for node in nodes
             )
             
-            # 更新工作流状态
-            if all(result.success for result in results.values()):
-                self._workflow_status[workflow_id] = WorkflowStatus.COMPLETED
-            else:
-                self._workflow_status[workflow_id] = WorkflowStatus.FAILED
-                
-            return results
+            # 更新工作流最终状态
+            self._workflow_status[workflow_id] = (
+                WorkflowStatus.COMPLETED if all_success
+                else WorkflowStatus.FAILED
+            )
             
+        except asyncio.CancelledError:
+            self._workflow_status[workflow_id] = WorkflowStatus.CANCELLED
+            raise
         except Exception as e:
             self._workflow_status[workflow_id] = WorkflowStatus.FAILED
             raise
+        finally:
+            if workflow_id in self._running_workflows:
+                del self._running_workflows[workflow_id]
+
+    async def execute_workflow(
+        self,
+        workflow_json: str,
+        workflow_id: str,
+        global_params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, NodeResult]:
+        """执行工作流
+        
+        Args:
+            workflow_json: 工作流JSON定义
+            workflow_id: 工作流ID
+            global_params: 全局参数
+            
+        Returns:
+            Dict[str, NodeResult]: 所有节点的执行结果
+        """
+        workflow = json.loads(workflow_json)
+        
+        # 验证工作流
+        self.validate_workflow(workflow)
+        
+        nodes = workflow["nodes"]
+        edges = workflow["edges"]
+        
+        # 构建节点依赖图
+        dependencies: Dict[str, Set[str]] = {node["id"]: set() for node in nodes}
+        for edge in edges:
+            dependencies[edge["to"]].add(edge["from"])
+            
+        # 初始化工作流状态
+        self._workflow_status[workflow_id] = WorkflowStatus.RUNNING
+        self._workflow_progress[workflow_id] = {}
+        results: Dict[str, NodeResult] = {}
+        
+        try:
+            # 获取入口节点（没有入度的节点）
+            entry_nodes = [
+                node for node in nodes
+                if not dependencies[node["id"]]
+            ]
+            
+            # 创建入口节点的任务
+            tasks = []
+            for node in entry_nodes:
+                task = asyncio.create_task(
+                    self._process_node(
+                        node,
+                        workflow_id,
+                        dependencies,
+                        nodes,
+                        results
+                    )
+                )
+                tasks.append(task)
+                
+            # 等待所有任务完成
+            await asyncio.gather(*tasks)
+            
+            # 检查是否所有节点都执行成功
+            all_success = all(
+                node_id in results and results[node_id].success
+                for node in nodes
+            )
+            
+            # 更新工作流最终状态
+            self._workflow_status[workflow_id] = (
+                WorkflowStatus.COMPLETED if all_success
+                else WorkflowStatus.FAILED
+            )
+            
+            return results
+            
+        except asyncio.CancelledError:
+            self._workflow_status[workflow_id] = WorkflowStatus.CANCELLED
+            raise
+        except Exception as e:
+            self._workflow_status[workflow_id] = WorkflowStatus.FAILED
+            raise
+        finally:
+            if workflow_id in self._running_workflows:
+                del self._running_workflows[workflow_id]
