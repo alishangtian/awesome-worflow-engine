@@ -1,6 +1,5 @@
 from typing import List, Dict, Any, Union
 from .base import BaseNode
-from ..core.engine import WorkflowEngine
 from ..core.models import NodeResult
 import json
 
@@ -9,7 +8,7 @@ class LoopNode(BaseNode):
         super().__init__()
         self._engine = None
         
-    def init_engine(self, engine: WorkflowEngine):
+    def init_engine(self, engine: Any):
         """初始化执行引擎,但不注册loop节点"""
         self._engine = engine
         
@@ -69,6 +68,8 @@ class LoopNode(BaseNode):
         workflow_id: str,
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
+        # 延迟导入 WorkflowEngine 以避免循环导入
+        from ..core.engine import WorkflowEngine
         """
         执行工作流
         

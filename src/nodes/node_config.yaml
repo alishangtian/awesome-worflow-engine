@@ -331,30 +331,30 @@ SerperSearchNode:
       default: 20
       description: "最大搜索结果数量"
 
-DuckDuckGoSearchNode:
-  type: "duckduckgo_search"
-  name: "DuckDuckGo搜索引擎"
-  description: "DuckDuckGo搜索引擎节点"
-  output:
-    success: "搜索是否成功"
-    results: "搜索结果列表，数组类型，每条结果包含字段为：title、href和body"
-    count: "结果数量"
-    error: "错误信息(如果有)"
-  params:
-    query:
-      type: "str"
-      required: true
-      description: "搜索关键词"
-    region:
-      type: "str"
-      required: false
-      default: "cn-zh"
-      description: "搜索地区和语言设置"
-    max_results:
-      type: "int"
-      required: false
-      default: 20
-      description: "最大搜索结果数量"
+# DuckDuckGoSearchNode:
+#   type: "duckduckgo_search"
+#   name: "DuckDuckGo搜索引擎"
+#   description: "DuckDuckGo搜索引擎节点"
+#   output:
+#     success: "搜索是否成功"
+#     results: "搜索结果列表，数组类型，每条结果包含字段为：title、href和body"
+#     count: "结果数量"
+#     error: "错误信息(如果有)"
+#   params:
+#     query:
+#       type: "str"
+#       required: true
+#       description: "搜索关键词"
+#     region:
+#       type: "str"
+#       required: false
+#       default: "cn-zh"
+#       description: "搜索地区和语言设置"
+#     max_results:
+#       type: "int"
+#       required: false
+#       default: 20
+#       description: "最大搜索结果数量"
 
 SeleniumWebCrawlerNode:
   type: "web_crawler"
