@@ -3,36 +3,32 @@
 import os
 from typing import Dict, Any
 from .base import BaseNode
+from ..api.config import API_CONFIG
 
 class FileWriteNode(BaseNode):
     """文件写入节点"""
+    
+    def __init__(self):
+        super().__init__()
+        # 从API_CONFIG中读取默认写入路径
+        self.default_write_path = API_CONFIG["file_write_path"]
+        
     async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        # 参数结构验证
-        if not isinstance(params.get("path"), dict):
-            raise ValueError("path参数必须为字典类型，包含完整路径信息")
+        filename = params.get("filename")
+        content = params.get("content")
+        format = params.get("format", "txt")  # 默认格式为txt
+        encoding = params.get("encoding", "utf-8")
+        
+        # 构建完整的文件路径，添加文件格式后缀
+        if not filename.endswith(f".{format}"):
+            filename = f"{filename}.{format}"
             
-        file_info = params["path"]
-        content_data = params["content"]
-        
-        # 解析路径参数
-        file_path = os.path.join(
-            str(file_info.get("base_path", "")),
-            str(file_info["filename"])
-        )
-        
-        # 解析内容参数
-        if isinstance(content_data, dict):
-            content = str(content_data.get("data", ""))
-            encoding = str(content_data.get("encoding", "utf-8"))
-        else:
-            content = str(content_data)
-            encoding = "utf-8"
-            
-        # 处理写入模式
-        mode = str(params.get("mode", {"type": "overwrite"}).get("type", "w"))
-        
-        # 确保目录存在
-        os.makedirs(os.path.dirname(os.path.abspath(file_path)), exist_ok=True)
+        # 使用配置的默认路径构建完整的文件路径
+        file_path = os.path.join(self.default_write_path, filename)
+        # 默认写入模式  
+        mode = "w"     
+        # 确保默认目录存在
+        os.makedirs(self.default_write_path, exist_ok=True)
         
         try:
             with open(file_path, mode, encoding=encoding) as f:
@@ -40,6 +36,8 @@ class FileWriteNode(BaseNode):
             return {
                 "result": "success",
                 "path": file_path,
+                "filename": filename,
+                "format": format,
                 "bytes_written": len(content.encode(encoding)),
                 "encoding": encoding,
                 "mode": mode

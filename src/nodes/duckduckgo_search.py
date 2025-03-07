@@ -15,11 +15,12 @@ class DuckDuckGoSearchNode(BaseNode):
         
         # 获取可选参数
         region = str(params.get("region", "cn-zh"))
+        maxResults = int(params.get("maxResultes", 20))
         
         try:
             with DDGS() as ddgs:
                 # 执行搜索
-                results = ddgs.text(query, max_results=10, region=region)
+                results = ddgs.text(query, max_results=maxResults, region=region)
                 
                 # 返回结果
                 return {

@@ -23,6 +23,7 @@ from src.api.events import (
     create_explanation_event, create_answer_event, create_complete_event,
     create_error_event
 )
+from src.api.utils import convert_node_result
 from src.api.llm_api import call_llm_api_stream
 
 # 配置日志记录
@@ -41,13 +42,7 @@ stream_manager = StreamManager()
 # 注册节点状态回调
 def node_status_callback(workflow_id: str, node_id: str, result: NodeResult):
     """处理节点状态变化的回调函数"""
-    return {
-        "node_id": node_id,
-        "success": result.success,
-        "status": result.status.value,
-        "data": result.data if result.success else None,
-        "error": result.error if not result.success else None
-    }
+    return convert_node_result(node_id, result)
 
 engine.register_node_callback(node_status_callback)
 
@@ -282,14 +277,8 @@ async def process_request(chat_id: str, text: str):
                 {}
             ):
                 logger.info(f"[{chat_id}] 节点 {node_id} 执行状态: status={result.status} 执行结果：success={result.success}")
-                # 将NodeResult对象转换为字典格式并立即发送
-                result_dict = {
-                    "node_id": node_id,
-                    "success": result.success,
-                    "status": result.status.value,
-                    "data": result.data if result.success else None,
-                    "error": result.error if not result.success else None
-                }
+                # 使用工具函数转换结果为可序列化的字典
+                result_dict = convert_node_result(node_id, result)
                 # 立即发送节点状态更新
                 event = await create_result_event(node_id, result_dict)
                 await stream_manager.send_message(chat_id, event)
@@ -350,14 +339,8 @@ async def execute_workflow(request: WorkflowRequest):
             workflow_id,
             request.global_params or {}
         ):
-            # 将NodeResult对象转换为字典格式
-            result_dict = {
-                "node_id": node_id,
-                "success": result.success,
-                "status": result.status.value,
-                "data": result.data if result.success else None,
-                "error": result.error if not result.success else None
-            }
+            # 使用工具函数转换结果为可序列化的字典
+            result_dict = convert_node_result(node_id, result)
             node_event = await create_result_event(node_id, result_dict)
             events.append(node_event)
             

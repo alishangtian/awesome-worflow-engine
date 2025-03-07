@@ -42,6 +42,10 @@ class APIConfig(BaseModel):
         default=os.getenv("SERPER_API_KEY", ""),
         description="Serper API密钥"
     )
+    file_write_path: str = Field(
+        default=os.getenv("FILE_WRITE_PATH", "./data/file"),
+        description="文件写入节点的默认写入路径"
+    )
 
 # 创建全局配置实例
 API_CONFIG = APIConfig().model_dump()

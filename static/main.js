@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 eventSource.close();
                 answerElement.innerHTML += `<div class="error">请求超时</div>`;
                 resetUI();
-            }, 60000);
+            }, 600000);
             
             // 处理状态消息
             eventSource.addEventListener('status', event => {

@@ -22,6 +22,7 @@ class SerperSearchNode(BaseNode):
         # 获取可选参数
         country = str(params.get("country", "cn"))
         language = str(params.get("language", "zh"))
+        maxResults = int(params.get("maxResultes", 20))
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -33,7 +34,8 @@ class SerperSearchNode(BaseNode):
                 payload = {
                     "q": query,
                     "gl": country,
-                    "hl": language
+                    "hl": language,
+                    "num": maxResults
                 }
                 
                 # 发送请求

@@ -4,7 +4,7 @@
 PythonExecuteNode:
   type: "python_execute"
   name: "Python函数执行"
-  description: "通用Python计算节点，支持执行自定义Python函数，可用于科学计算、数据处理、算法实现等多种场景。内置支持numpy、pandas等科学计算库，可实现复杂的数学运算、统计分析、数据转换等功能。"
+  description: "通用Python计算节点，支持执行自定义Python函数，可用于科学计算、数据处理、算法实现等多种场景。内置支持numpy、pandas等科学计算库，可实现复杂的数学运算、统计分析等功能。"
   output:
     result: "函数执行结果"
     stdout: "标准输出内容"
@@ -37,27 +37,6 @@ PythonExecuteNode:
       required: false
       default: 30
       description: "执行超时时间(秒)，用于控制长时间运算的超时限制"
-
-TextConcatNode:
-  type: "text_concat"
-  name: "文本拼接"
-  description: "文本拼接节点"
-  output:
-    result: "拼接后的文本"
-  params:
-    text1:
-      type: "str"
-      required: true
-      description: "第一段文本"
-    text2:
-      type: "str"
-      required: true
-      description: "第二段文本"
-    separator:
-      type: "str"
-      required: false
-      default: ""
-      description: "分隔符"
 
 TextReplaceNode:
   type: "text_replace"
@@ -143,7 +122,7 @@ ChatNode:
     max_tokens:
       type: "int"
       required: false
-      default: 2000
+      default: 32000
       description: "最大生成token数，用于控制输出长度，避免过长回复"
 
 FileReadNode:
@@ -166,28 +145,36 @@ FileReadNode:
 FileWriteNode:
   type: "file_write"
   name: "文件写入"
-  description: "文件写入节点"
+  description: "文件写入节点，支持指定文件名称、内容和格式"
+  config:
+    default_write_path: "./data/file"
   output:
-    success: "写入是否成功"
+    result: "写入结果"
+    path: "完整文件路径"
+    filename: "文件名称"
+    format: "文件格式"
+    bytes_written: "写入的字节数"
+    encoding: "使用的编码"
+    mode: "写入模式"
   params:
-    path:
+    filename:
       type: "str"
       required: true
-      description: "文件路径"
+      description: "文件名称（不需要包含格式后缀）"
     content:
       type: "str"
       required: true
-      description: "写入内容"
+      description: "要写入的文件内容"
+    format:
+      type: "str"
+      required: false
+      default: "txt"
+      description: "文件格式（如txt、json、csv等）"
     encoding:
       type: "str"
       required: false
       default: "utf-8"
       description: "文件编码"
-    mode:
-      type: "str"
-      required: false
-      default: "w"
-      description: "写入模式(w:覆盖, a:追加)"
 
 DbQueryNode:
   type: "db_query"
@@ -291,13 +278,36 @@ TerminalNode:
       default: true
       description: "是否使用shell执行命令"
 
+LoopNode:
+  type: "loop_node"
+  name: "循环节点"
+  description: "循环执行节点，支持对字符串或数组进行循环，并执行指定的工作流。工作流中可以通过引用表达式访问循环项的上下文变量。"
+  output:
+    results: "循环执行的结果列表"
+    total: "循环执行的总次数"
+    success: "是否全部执行成功"
+  params:
+    array:
+      type: "Union[str, list]"
+      required: true
+      description: "要循环执行的数据，可以是字符串或数组。如果是字符串，会被转换为单元素数组处理。"
+    workflow_json:
+      type: "dict"
+      required: true
+      description: "工作流JSON定义，支持通过引用表达式访问以下循环上下文变量：
+        - index: 当前循环的索引
+        - item: 当前循环的元素值
+        - length: 循环数组的总长度
+        - first: 是否是第一个元素
+        - last: 是否是最后一个元素"
+
 SerperSearchNode:
   type: "serper_search"
-  name: "Serper搜索"
-  description: "Serper搜索节点"
+  name: "Serper搜索引擎"
+  description: "Serper搜索引擎节点"
   output:
     success: "搜索是否成功"
-    results: "搜索结果列表"
+    results: "搜索结果列表，数组类型，每条结果包含字段为：title、link和snippet"
     count: "结果数量"
     error: "错误信息(如果有)"
   params:
@@ -315,14 +325,19 @@ SerperSearchNode:
       required: false
       default: "zh"
       description: "搜索语言代码"
+    max_results:
+      type: "int"
+      required: false
+      default: 20
+      description: "最大搜索结果数量"
 
 DuckDuckGoSearchNode:
   type: "duckduckgo_search"
-  name: "DuckDuckGo搜索"
-  description: "DuckDuckGo搜索节点"
+  name: "DuckDuckGo搜索引擎"
+  description: "DuckDuckGo搜索引擎节点"
   output:
     success: "搜索是否成功"
-    results: "搜索结果列表"
+    results: "搜索结果列表，数组类型，每条结果包含字段为：title、href和body"
     count: "结果数量"
     error: "错误信息(如果有)"
   params:
@@ -335,3 +350,22 @@ DuckDuckGoSearchNode:
       required: false
       default: "cn-zh"
       description: "搜索地区和语言设置"
+    max_results:
+      type: "int"
+      required: false
+      default: 20
+      description: "最大搜索结果数量"
+
+SeleniumWebCrawlerNode:
+  type: "web_crawler"
+  name: "网络爬虫"
+  description: "接收URL并返回网页正文内容的节点"
+  output:
+    success: "执行状态"
+    error: "错误信息"
+    content: "提取的正文内容"
+  params:
+    url:
+      type: "str"
+      required: true
+      description: "需要抓取的网页URL"

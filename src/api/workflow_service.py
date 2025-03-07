@@ -95,8 +95,8 @@ class WorkflowService:
         workflow_status = "\n".join(workflow_desc)
         
         messages = [
-            {"role": "system", "content": "分析工作流执行结果，简要说明执行过程和最终结果。"},
-            {"role": "user", "content": f"用户输入: {original_text}\n执行情况:\n{workflow_status}"}
+            {"role": "system", "content": f"你是一位专业的全面的问题专家。请参考context回答用户问题，切记：回答内容不要提及你参考了什么信息 \n\n context：\n {workflow_status}"},
+            {"role": "user", "content": f"{original_text}"}
         ]
         
         async for chunk in call_llm_api_stream(messages, request_id):
