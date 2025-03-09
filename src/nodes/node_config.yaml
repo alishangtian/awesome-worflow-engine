@@ -38,62 +38,10 @@ PythonExecuteNode:
       default: 30
       description: "执行超时时间(秒)，用于控制长时间运算的超时限制"
 
-TextReplaceNode:
-  type: "text_replace"
-  name: "文本替换"
-  description: "文本替换节点"
-  output:
-    result: "替换后的文本"
-  params:
-    text:
-      type: "str"
-      required: true
-      description: "原始文本"
-    old_str:
-      type: "str"
-      required: true
-      description: "要替换的文本"
-    new_str:
-      type: "str"
-      required: true
-      description: "替换后的文本"
-
-AddNode:
-  type: "add"
-  name: "加法"
-  description: "数值加法节点"
-  output:
-    result: "相加的结果"
-  params:
-    num1:
-      type: "float"
-      required: true
-      description: "第一个数值"
-    num2:
-      type: "float"
-      required: true
-      description: "第二个数值"
-
-MultiplyNode:
-  type: "multiply"
-  name: "乘法"
-  description: "数值乘法节点"
-  output:
-    result: "相乘的结果"
-  params:
-    num1:
-      type: "float"
-      required: true
-      description: "第一个数值"
-    num2:
-      type: "float"
-      required: true
-      description: "第二个数值"
-
 ChatNode:
   type: "chat"
   name: "AI对话"
-  description: "智能AI对话节点，基于大规模语言模型，支持自然语言理解、文本生成、知识问答等多种场景。可用于文本处理、内容生成、智能问答、数据分析等任务，支持上下文理解和多轮对话。"
+  description: "智能AI对话节点，基于大语言模型，支持自然语言理解、文本生成、知识问答等多种场景。可用于文本处理、内容生成、智能问答、数据分析等任务，支持上下文理解和多轮对话。"
   output:
     response: "AI的回复内容，包括生成的文本、分析结果或处理后的数据"
   params:
@@ -110,8 +58,8 @@ ChatNode:
     model:
       type: "str"
       required: false
-      default: "alibaba/qwen-max-2025-01-25"
-      description: "使用的AI模型，不同模型具有不同的专长和性能特点"
+      default: "Doubao-pro-256k"
+      description: "使用的AI模型，不同模型具有不同的专长和性能特点,但是当上下文长度很大时,如生成报告,用Doubao-pro-256k"
     temperature:
       type: "float"
       required: false
@@ -119,11 +67,6 @@ ChatNode:
       description: "温度参数(0-1)，控制输出的随机性：
         - 较低的值(接近0)：输出更确定、保守
         - 较高的值(接近1)：输出更多样、创造性"
-    max_tokens:
-      type: "int"
-      required: false
-      default: 32000
-      description: "最大生成token数，用于控制输出长度，避免过长回复"
 
 FileReadNode:
   type: "file_read"
@@ -280,8 +223,8 @@ TerminalNode:
 
 LoopNode:
   type: "loop_node"
-  name: "循环节点"
-  description: "循环执行节点，支持对字符串或数组进行循环，并执行指定的工作流。工作流中可以通过引用表达式访问循环项的上下文变量。"
+  name: "循环执行节点"
+  description: "循环执行节点，支持对数组进行循环，并执行指定的工作流。工作流中可以通过引用表达式访问循环项的上下文变量。"
   output:
     results: "循环执行的结果列表"
     total: "循环执行的总次数"
@@ -290,7 +233,7 @@ LoopNode:
     array:
       type: "Union[str, list]"
       required: true
-      description: "要循环执行的数据，可以是字符串或数组。如果是字符串，会被转换为单元素数组处理。"
+      description: "要循环执行的数据，是数组,数组元素可以是对象,也可以是基础数据,如字符串,整数等"
     workflow_json:
       type: "dict"
       required: true
@@ -355,6 +298,21 @@ SerperSearchNode:
 #       required: false
 #       default: 20
 #       description: "最大搜索结果数量"
+
+ArxivSearchNode:
+  type: "arxiv_search"
+  name: "Arxiv论文搜索"
+  description: "搜索Arxiv论文库，返回最相关的5篇论文信息，包括标题、作者、摘要、发布日期、PDF链接等"
+  output:
+    success: "搜索是否成功"
+    results: "论文搜索结果列表，每篇论文包含：title(标题)、authors(作者列表)、summary(摘要)、abstract(详细内容)、published(发布日期)、pdf_url(PDF下载链接)、entry_id(论文ID)、primary_category(主要分类)"
+    count: "返回的论文数量"
+    error: "错误信息(如果有)"
+  params:
+    query:
+      type: "str"
+      required: true
+      description: "搜索关键词，支持标题、作者、摘要等字段的搜索"
 
 SeleniumWebCrawlerNode:
   type: "web_crawler"

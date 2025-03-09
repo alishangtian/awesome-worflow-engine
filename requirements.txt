@@ -14,3 +14,4 @@ duckduckgo-search==7.5.0
 llama-index==0.12.22
 llama_index.embeddings.ollama==0.6.0
 selenium==4.29.0
+arxiv==2.1.0

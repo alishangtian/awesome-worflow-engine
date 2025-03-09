@@ -10,7 +10,7 @@ class ChatNode(BaseNode):
     
     async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         input_text = str(params["input"])
-        model = str(params.get("model", "gpt-3.5-turbo"))
+        model = str(params.get("model", "deepseek-chat"))
         temperature = float(params.get("temperature", 0.7))
         
         messages = [

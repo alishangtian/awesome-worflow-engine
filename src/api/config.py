@@ -22,6 +22,14 @@ class APIConfig(BaseModel):
         default=os.getenv("MODEL_NAME", "deepseek-chat"),
         description="默认使用的模型名称"
     )
+    long_context_model: str = Field(
+        default=os.getenv("LONG_CONTEXT_MODEL", "deepseek-chat-32k"),
+        description="长上下文模型名称"
+    )
+    context_length_threshold: int = Field(
+        default=int(os.getenv("CONTEXT_LENGTH_THRESHOLD", "32000")),
+        description="切换到长上下文模型的阈值(字符数)"
+    )
     base_url: str = Field(
         default=os.getenv("BASE_URL", "https://api.deepseek.com/v1"),
         description="API基础URL"

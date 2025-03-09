@@ -1,5 +1,6 @@
 from typing import Dict, Any, List, Callable
 import os
+import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -7,7 +8,10 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from bs4 import BeautifulSoup, Comment
 from .base import BaseNode
+from ..utils.logger import LoggerConfig
 import re
+ 
+logger = LoggerConfig.get_logger()
 
 class SeleniumWebCrawlerNode(BaseNode):
     """网络爬虫节点 - 使用 Selenium 接收 URL 并返回网页正文内容的节点
@@ -20,9 +24,12 @@ class SeleniumWebCrawlerNode(BaseNode):
     """
     
     def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        start_time = time.time()
         url = str(params.get("url", "")).strip()
         if not url:
             raise ValueError("url参数不能为空")
+            
+        logger.info(f"开始爬取: {url}")
 
         # 配置 Selenium WebDriver
         options = webdriver.ChromeOptions()
@@ -40,7 +47,7 @@ class SeleniumWebCrawlerNode(BaseNode):
         try:
             # 启动 WebDriver
             driver = webdriver.Chrome(options=options)
-            driver.set_page_load_timeout(60)
+            driver.set_page_load_timeout(120)
             # 访问 URL
             driver.get(url)
             # 等待页面加载完成
@@ -50,7 +57,7 @@ class SeleniumWebCrawlerNode(BaseNode):
             wait_selectors = [(By.CSS_SELECTOR, selector.strip()) for selector in wait_selectors_str.split(',')]
 
             # 使用任何一种条件进行等待
-            WebDriverWait(driver, 60).until(
+            WebDriverWait(driver, 120).until(
                 EC.any_of(*[EC.presence_of_element_located(selector) for selector in wait_selectors])
             )
 
@@ -77,6 +84,10 @@ class SeleniumWebCrawlerNode(BaseNode):
             text = re.sub(r'[ \t]{2,}', ' ', text)   # 删除多余空格
             text = text.strip()
 
+            end_time = time.time()
+            execution_time = end_time - start_time
+            content_length = len(text)
+            logger.info(f"爬取成功: {url}, 内容长度: {content_length} 字符, 耗时: {execution_time:.2f} 秒")
             return {
                 "success": True,
                 "error": None,
@@ -84,25 +95,35 @@ class SeleniumWebCrawlerNode(BaseNode):
             }
 
         except TimeoutException as e:
+            end_time = time.time()
+            execution_time = end_time - start_time
+            logger.error(f"页面加载超时: {url}, 错误: {str(e)}, 耗时: {execution_time:.2f} 秒")
             return {
                 "success": False,
                 "error": f"页面加载超时: {str(e)}",
                 "content": ""
             }
         except WebDriverException as e:
+            end_time = time.time()
+            execution_time = end_time - start_time
+            logger.error(f"WebDriver 错误: {url}, 错误: {str(e)}, 耗时: {execution_time:.2f} 秒")
             return {
                 "success": False,
                 "error": f"WebDriver 错误: {str(e)}",
                 "content": ""
             }
         except Exception as e:
+            end_time = time.time()
+            execution_time = end_time - start_time
+            logger.error(f"未知错误: {url}, 错误: {str(e)}, 耗时: {execution_time:.2f} 秒")
             return {
                 "success": False,
                 "error": str(e),
                 "content": ""
             }
-        finally:
+        finally: 
             # 关闭 WebDriver
             if 'driver' in locals():
+                logger.info(f"关闭WebDriver: {url}")
                 driver.close()
                 driver.quit()

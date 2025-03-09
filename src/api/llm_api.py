@@ -4,11 +4,53 @@ import logging
 import json
 import asyncio
 import aiohttp
-from typing import List, Dict, Union, AsyncGenerator
+from typing import List, Dict, Union, AsyncGenerator, Tuple
+
 from .config import API_CONFIG, retry_on_error
 
 # 配置日志记录
 logger = logging.getLogger(__name__)
+
+def calculate_messages_length(messages: List[Dict[str, str]]) -> int:
+    """
+    计算消息列表的总字符长度
+    
+    Args:
+        messages: 消息列表
+    
+    Returns:
+        总字符长度
+    """
+    total_length = 0
+    for message in messages:
+        # 计算每条消息中role和content的长度
+        total_length += len(message.get("role", ""))
+        total_length += len(message.get("content", ""))
+    return total_length
+
+def select_model(messages: List[Dict[str, str]], request_id: str = None) -> str:
+    """
+    根据消息长度选择合适的模型
+    
+    Args:
+        messages: 消息列表
+        request_id: 请求ID,用于日志追踪
+    
+    Returns:
+        选择的模型名称
+    """
+    messages_length = calculate_messages_length(messages)
+    
+    if messages_length > API_CONFIG["context_length_threshold"]:
+        if request_id:
+            logger.info(
+                f"[{request_id}] 消息长度({messages_length})超过阈值"
+                f"({API_CONFIG['context_length_threshold']}), "
+                f"使用长上下文模型: {API_CONFIG['long_context_model']}"
+            )
+        return API_CONFIG["long_context_model"]
+    
+    return API_CONFIG["model_name"]
 
 async def call_llm_api_stream(messages: List[Dict[str, str]], request_id: str = None) -> AsyncGenerator[str, None]:
     """
@@ -23,6 +65,9 @@ async def call_llm_api_stream(messages: List[Dict[str, str]], request_id: str = 
     """
     if request_id:
         logger.info(f"[{request_id}] 开始流式调用llm API")
+    
+    # 根据消息长度选择模型
+    model = select_model(messages, request_id)
         
     async with aiohttp.ClientSession() as session:
         headers = {
@@ -31,7 +76,7 @@ async def call_llm_api_stream(messages: List[Dict[str, str]], request_id: str = 
         }
         
         data = {
-            "model": API_CONFIG["model_name"],
+            "model": model,
             "messages": messages,
             "stream": True
         }
@@ -87,6 +132,9 @@ async def call_llm_api(messages: List[Dict[str, str]], request_id: str = None) -
     """
     if request_id:
         logger.info(f"[{request_id}] 开始调用llm API")
+    
+    # 根据消息长度选择模型
+    model = select_model(messages, request_id)
         
     async with aiohttp.ClientSession() as session:
         headers = {
@@ -95,7 +143,7 @@ async def call_llm_api(messages: List[Dict[str, str]], request_id: str = None) -
         }
         
         data = {
-            "model": API_CONFIG["model_name"],
+            "model": model,
             "messages": messages,
             "stream": False
         }
