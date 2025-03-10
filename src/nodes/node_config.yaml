@@ -55,11 +55,6 @@ ChatNode:
         4. 数据分析：解析和分析文本数据
         5. 文本转换：格式转换、翻译、改写等
         6. 逻辑推理：进行推理、决策和问题解决"
-    model:
-      type: "str"
-      required: false
-      default: "Doubao-pro-256k"
-      description: "使用的AI模型，不同模型具有不同的专长和性能特点,但是当上下文长度很大时,如生成报告,用Doubao-pro-256k"
     temperature:
       type: "float"
       required: false
@@ -250,7 +245,7 @@ SerperSearchNode:
   description: "Serper搜索引擎节点"
   output:
     success: "搜索是否成功"
-    results: "搜索结果列表，数组类型，每条结果包含字段为：title、link和snippet"
+    results: "搜索结果列表，数组类型，每条结果包含字段为：title、link和snippet，如果需要网页正文内容，需要通过link爬取，这里只提供全文概要字段snippet"
     count: "结果数量"
     error: "错误信息(如果有)"
   params:
@@ -305,7 +300,7 @@ ArxivSearchNode:
   description: "搜索Arxiv论文库，返回最相关的5篇论文信息，包括标题、作者、摘要、发布日期、PDF链接等"
   output:
     success: "搜索是否成功"
-    results: "论文搜索结果列表，每篇论文包含：title(标题)、authors(作者列表)、summary(摘要)、abstract(详细内容)、published(发布日期)、pdf_url(PDF下载链接)、entry_id(论文ID)、primary_category(主要分类)"
+    results: "论文搜索结果列表，数组类型，每篇论文包含：title(标题)、authors(作者列表)、summary(摘要)、content(正文)、published(发布日期)、pdf_url(PDF下载链接)、entry_id(论文ID)、primary_category(主要分类)"
     count: "返回的论文数量"
     error: "错误信息(如果有)"
   params:
@@ -314,7 +309,7 @@ ArxivSearchNode:
       required: true
       description: "搜索关键词，支持标题、作者、摘要等字段的搜索"
 
-SeleniumWebCrawlerNode:
+SerperWebCrawlerNode:
   type: "web_crawler"
   name: "网络爬虫"
   description: "接收URL并返回网页正文内容的节点"

@@ -42,12 +42,11 @@ def select_model(messages: List[Dict[str, str]], request_id: str = None) -> str:
     messages_length = calculate_messages_length(messages)
     
     if messages_length > API_CONFIG["context_length_threshold"]:
-        if request_id:
-            logger.info(
-                f"[{request_id}] 消息长度({messages_length})超过阈值"
-                f"({API_CONFIG['context_length_threshold']}), "
-                f"使用长上下文模型: {API_CONFIG['long_context_model']}"
-            )
+        logger.info(
+            f"[{request_id}] 消息长度({messages_length})超过阈值"
+            f"({API_CONFIG['context_length_threshold']}), "
+            f"使用长上下文模型: {API_CONFIG['long_context_model']}"
+        )
         return API_CONFIG["long_context_model"]
     
     return API_CONFIG["model_name"]
@@ -63,13 +62,27 @@ async def call_llm_api_stream(messages: List[Dict[str, str]], request_id: str = 
     Returns:
         异步生成器,生成流式响应内容
     """
-    if request_id:
-        logger.info(f"[{request_id}] 开始流式调用llm API")
+    
+    logger.info(f"[{request_id}] 开始流式调用llm API")
     
     # 根据消息长度选择模型
     model = select_model(messages, request_id)
+    messages_length = calculate_messages_length(messages)
+    
+    logger.info(
+        f"[{request_id}] 请求参数: model={model}, "
+        f"messages_count={len(messages)}, "
+        f"messages_length={messages_length}"
+    )
         
-    async with aiohttp.ClientSession() as session:
+    # Configure larger buffer sizes for handling big response chunks
+    conn = aiohttp.TCPConnector()
+    client_timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(
+        connector=conn,
+        timeout=client_timeout,
+        read_bufsize=2**17  # 128KB buffer size
+    ) as session:
         headers = {
             "Authorization": f"Bearer {API_CONFIG['api_key']}",
             "Content-Type": "application/json"
@@ -86,7 +99,7 @@ async def call_llm_api_stream(messages: List[Dict[str, str]], request_id: str = 
                 f"{API_CONFIG['base_url']}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=30
+                chunked=True
             ) as response:
                 if response.status != 200:
                     error_text = await response.text()
@@ -106,7 +119,13 @@ async def call_llm_api_stream(messages: List[Dict[str, str]], request_id: str = 
                                     if 'content' in delta:
                                         yield delta['content']
                         except Exception as e:
-                            logger.error(f"[{request_id}] 处理流式响应出错: {str(e)}")
+                            if "Chunk too big" in str(e):
+                                logger.warning(f"[{request_id}] 收到大块响应，尝试继续处理")
+                                # Try to process the chunk even if it's large
+                                continue
+                            else:
+                                logger.error(f"[{request_id}] 处理流式响应出错: {str(e)}")
+                                raise
                 
         except asyncio.TimeoutError:
             error_msg = "API调用超时"
@@ -119,24 +138,40 @@ async def call_llm_api_stream(messages: List[Dict[str, str]], request_id: str = 
             raise
 
 @retry_on_error(max_retries=3)
-async def call_llm_api(messages: List[Dict[str, str]], request_id: str = None) -> str:
+async def call_llm_api(messages: List[Dict[str, str]], request_id: str = None, temperature: float = 0.1) -> str:
     """
     调用llm API服务，支持自动重试
     
     Args:
         messages: 消息列表
         request_id: 请求ID,用于日志追踪
+        temperature: 温度参数，控制输出的随机性，默认0.1
     
     Returns:
         返回完整响应字符串
     """
-    if request_id:
-        logger.info(f"[{request_id}] 开始调用llm API")
+    logger.info(f"[{request_id}] 开始调用llm API")
     
     # 根据消息长度选择模型
     model = select_model(messages, request_id)
+    messages_length = calculate_messages_length(messages)
+    
+    
+    logger.info(
+        f"[{request_id}] 请求参数: model={model}, "
+        f"temperature={temperature}, "
+        f"messages_count={len(messages)}, "
+        f"messages_length={messages_length}"
+    )
         
-    async with aiohttp.ClientSession() as session:
+    # Use same optimized session configuration as streaming
+    conn = aiohttp.TCPConnector()
+    client_timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(
+        connector=conn,
+        timeout=client_timeout,
+        read_bufsize=2**17  # 64KB buffer size
+    ) as session:
         headers = {
             "Authorization": f"Bearer {API_CONFIG['api_key']}",
             "Content-Type": "application/json"
@@ -145,7 +180,8 @@ async def call_llm_api(messages: List[Dict[str, str]], request_id: str = None) -
         data = {
             "model": model,
             "messages": messages,
-            "stream": False
+            "stream": False,
+            "temperature": temperature
         }
         
         try:
@@ -153,7 +189,7 @@ async def call_llm_api(messages: List[Dict[str, str]], request_id: str = None) -
                 f"{API_CONFIG['base_url']}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=30
+                chunked=True
             ) as response:
                 if response.status != 200:
                     error_text = await response.text()

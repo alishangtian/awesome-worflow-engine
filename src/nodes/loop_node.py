@@ -1,11 +1,11 @@
 from typing import List, Dict, Any, Union
 from .base import BaseNode
 from ..core.models import NodeResult
-from ..utils.logger import LoggerConfig
 import json
 import asyncio
+import logging
 
-logger = LoggerConfig.get_logger()
+logger = logging.getLogger(__name__)
 
 class LoopNode(BaseNode):
     def __init__(self):

@@ -1,20 +1,14 @@
-from typing import Dict, Any, List, Callable
+from typing import Dict, Any
 import os
+import logging
 import time
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, WebDriverException
-from bs4 import BeautifulSoup, Comment
+import requests
 from .base import BaseNode
-from ..utils.logger import LoggerConfig
-import re
- 
-logger = LoggerConfig.get_logger()
 
-class SeleniumWebCrawlerNode(BaseNode):
-    """网络爬虫节点 - 使用 Selenium 接收 URL 并返回网页正文内容的节点
+logger = logging.getLogger(__name__)
+
+class SerperWebCrawlerNode(BaseNode):
+    """网络爬虫节点 - 使用 Serper API 接收 URL 并返回网页正文内容的节点
     
     参数:
         url (str): 需要抓取的网页URL
@@ -23,6 +17,11 @@ class SeleniumWebCrawlerNode(BaseNode):
         dict: 包含执行状态、错误信息和提取的正文内容
     """
     
+    def __init__(self):
+        super().__init__()
+        self.api_key = os.getenv('SERPER_API_KEY', '')
+        self.api_url = 'https://scrape.serper.dev'
+
     def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         start_time = time.time()
         url = str(params.get("url", "")).strip()
@@ -31,99 +30,69 @@ class SeleniumWebCrawlerNode(BaseNode):
             
         logger.info(f"开始爬取: {url}")
 
-        # 配置 Selenium WebDriver
-        options = webdriver.ChromeOptions()
-        options.add_argument('--headless')  # 无头模式
-        options.add_argument('--disable-gpu')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--enable-unsafe-swiftshader')
-        options.add_argument('--disable-extensions')
-        options.add_argument('--ignore-certificate-errors')
-        options.add_argument('--disable-popup-blocking')
-        options.add_argument('--incognito')  # 隐身模式
-        options.add_argument('--window-size=1280,1024')
-        options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3')
         try:
-            # 启动 WebDriver
-            driver = webdriver.Chrome(options=options)
-            driver.set_page_load_timeout(120)
-            # 访问 URL
-            driver.get(url)
-            # 等待页面加载完成
-            
-            # 从环境变量获取等待条件的选择器
-            wait_selectors_str = os.getenv('WEBCRAWLER_WAIT_SELECTORS', 'main,article,div.article')
-            wait_selectors = [(By.CSS_SELECTOR, selector.strip()) for selector in wait_selectors_str.split(',')]
+            # 准备请求头和数据
+            headers = {
+                'X-API-KEY': self.api_key,
+                'Content-Type': 'application/json'
+            }
+            data = {
+                'url': url
+            }
 
-            # 使用任何一种条件进行等待
-            WebDriverWait(driver, 120).until(
-                EC.any_of(*[EC.presence_of_element_located(selector) for selector in wait_selectors])
+            # 发送请求
+            response = requests.post(
+                self.api_url,
+                headers=headers,
+                json=data,
+                timeout=120
             )
+            response.raise_for_status()
 
-            # 获取页面源码
-            html = driver.page_source
-            # 预处理 HTML
-            main_content = None
-            soup = BeautifulSoup(html)
-            # 从环境变量获取内容选择器
-            content_selectors_str = os.getenv('WEBCRAWLER_CONTENT_SELECTORS', 'article,div.article,div.article-content,main')
-            content_selectors = [selector.strip() for selector in content_selectors_str.split(',')]
-            
-            # 尝试多种选择器来找到正文内容
-            for selector in content_selectors:
-                main_content = soup.select_one(selector)
-                if main_content:
-                    break
-                
-            # 提取并清理文本
-            text = main_content.get_text(separator='\n')
-            
-            # 优化文本格式
-            text = re.sub(r'\n{3,}', '\n\n', text)  # 合并多余空行
-            text = re.sub(r'[ \t]{2,}', ' ', text)   # 删除多余空格
-            text = text.strip()
+            # 获取响应内容
+            result = response.json()
+            text = result.get('text', '')
 
             end_time = time.time()
             execution_time = end_time - start_time
             content_length = len(text)
             logger.info(f"爬取成功: {url}, 内容长度: {content_length} 字符, 耗时: {execution_time:.2f} 秒")
+            
             return {
                 "success": True,
                 "error": None,
                 "content": text
             }
 
-        except TimeoutException as e:
+        except requests.Timeout:
             end_time = time.time()
             execution_time = end_time - start_time
-            logger.error(f"页面加载超时: {url}, 错误: {str(e)}, 耗时: {execution_time:.2f} 秒")
+            error_msg = f"请求超时: {url}"
+            logger.error(f"{error_msg}, 耗时: {execution_time:.2f} 秒")
             return {
                 "success": False,
-                "error": f"页面加载超时: {str(e)}",
+                "error": error_msg,
                 "content": ""
             }
-        except WebDriverException as e:
+
+        except requests.RequestException as e:
             end_time = time.time()
             execution_time = end_time - start_time
-            logger.error(f"WebDriver 错误: {url}, 错误: {str(e)}, 耗时: {execution_time:.2f} 秒")
+            error_msg = f"请求错误: {str(e)}"
+            logger.error(f"{error_msg}, URL: {url}, 耗时: {execution_time:.2f} 秒")
             return {
                 "success": False,
-                "error": f"WebDriver 错误: {str(e)}",
+                "error": error_msg,
                 "content": ""
             }
+
         except Exception as e:
             end_time = time.time()
             execution_time = end_time - start_time
-            logger.error(f"未知错误: {url}, 错误: {str(e)}, 耗时: {execution_time:.2f} 秒")
+            error_msg = f"未知错误: {str(e)}"
+            logger.error(f"{error_msg}, URL: {url}, 耗时: {execution_time:.2f} 秒")
             return {
                 "success": False,
-                "error": str(e),
+                "error": error_msg,
                 "content": ""
             }
-        finally: 
-            # 关闭 WebDriver
-            if 'driver' in locals():
-                logger.info(f"关闭WebDriver: {url}")
-                driver.close()
-                driver.quit()

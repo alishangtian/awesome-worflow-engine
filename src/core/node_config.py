@@ -207,15 +207,15 @@ class NodeConfigManager:
                     "params": {
                         "text": "$concat1.result",
                         "old_str": "World",
-                        "new_str": "$concat2.result"
+                        "new_str": "${concat2.result}"
                     }
                 },
                 {
                     "id": "multiply1",
                     "type": "multiply",
                     "params": {
-                        "num1": "$add1.result",
-                        "num2": "$add2.result"
+                        "num1": "${add1.result}",
+                        "num2": "${add2.result}"
                     }
                 }
             ],

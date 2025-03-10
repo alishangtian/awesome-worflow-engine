@@ -15,7 +15,7 @@ class SerperSearchNode(BaseNode):
             raise ValueError("query参数不能为空")
         
         # 获取API密钥
-        api_key = API_CONFIG.get("serper_api_key")
+        api_key = os.getenv('SERPER_API_KEY', '')
         if not api_key:
             raise ValueError("未设置SERPER_API_KEY环境变量")
             

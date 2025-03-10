@@ -1,75 +1,53 @@
+"""Logging configuration module"""
+
 import os
 import logging
-from logging.handlers import TimedRotatingFileHandler
-from datetime import datetime
+from typing import Optional
 
-class LoggerConfig:
-    """统一的日志配置类"""
+def setup_logger(
+    log_file_path: str,
+    log_level: int = logging.INFO,
+    logger_name: Optional[str] = None
+) -> logging.Logger:
+    """Configure and return a logger with file and console handlers.
     
-    _instance = None
-    _initialized = False
+    Args:
+        log_file_path: Path to the log file
+        log_level: Logging level (default: logging.INFO)
+        logger_name: Name of the logger (default: None for root logger)
+        
+    Returns:
+        logging.Logger: Configured logger instance
+    """
+    # 确保日志目录存在
+    os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
     
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(LoggerConfig, cls).__new__(cls)
-        return cls._instance
+    # 获取或创建logger
+    logger = logging.getLogger(logger_name) if logger_name else logging.getLogger()
+    logger.setLevel(log_level)
     
-    def __init__(self):
-        if not LoggerConfig._initialized:
-            self._setup_logger()
-            LoggerConfig._initialized = True
-
-    def _setup_logger(self):
-        """设置日志配置"""
-        # 创建logs目录
-        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-            
-        # 设置日志文件路径
-        log_file = os.path.join(log_dir, 'workflow_engine.log')
-        
-        # 创建logger
-        self.logger = logging.getLogger('workflow_engine')
-        self.logger.setLevel(logging.INFO)
-        
-        # 日志格式
-        formatter = logging.Formatter(
-            '%(asctime)s [%(levelname)s] [%(module)s:%(lineno)d] - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-        
-        # 控制台处理器
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        console_handler.setLevel(logging.INFO)
-        
-        # 文件处理器(每天轮换)
-        file_handler = TimedRotatingFileHandler(
-            filename=log_file,
-            when='midnight',
-            interval=1,
-            backupCount=30,  # 保留30天的日志
-            encoding='utf-8'
-        )
-        file_handler.setFormatter(formatter)
-        file_handler.setLevel(logging.INFO)
-        
-        # 添加处理器（避免重复添加）
-        if not any(isinstance(h, logging.StreamHandler) for h in self.logger.handlers):
-            self.logger.addHandler(console_handler)
-        if not any(isinstance(h, TimedRotatingFileHandler) for h in self.logger.handlers):
-            self.logger.addHandler(file_handler)
+    # 创建文件处理器
+    file_handler = logging.FileHandler(log_file_path)
+    file_handler.setLevel(log_level)
     
-    @classmethod
-    def get_logger(cls):
-        """获取logger实例"""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance.logger
-
-# 使用示例
-# from utils.logger import LoggerConfig
-# logger = LoggerConfig.get_logger()
-# logger.info("这是一条信息日志")
-# logger.error("这是一条错误日志")
+    # 创建控制台处理器
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(log_level)
+    
+    # 配置日志格式
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - [%(process)d:%(threadName)s] - [%(filename)s:%(lineno)d] - %(message)s'
+    formatter = logging.Formatter(log_format, datefmt='%Y-%m-%d %H:%M:%S')
+    
+    # 设置格式化器
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+    
+    # 移除现有的处理器
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+    
+    # 添加处理器到logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
+    return logger

@@ -1,7 +1,7 @@
 """API主模块"""
 
-import logging
 import os
+import logging
 import json
 import importlib
 import asyncio
@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 from sse_starlette.sse import EventSourceResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
+from src.utils.logger import setup_logger
 
 from src.core.engine import WorkflowEngine, NodeResult
 from src.core.node_config import NodeConfigManager
@@ -25,14 +26,17 @@ from src.api.events import (
 )
 from src.api.utils import convert_node_result
 from src.api.llm_api import call_llm_api_stream
+ 
+# 加载环境变量
+from dotenv import load_dotenv
+load_dotenv()
 
-# 配置日志记录
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
+# 获取日志文件路径
+log_file_path = os.getenv('log_file_path', 'logs/workflow_engine.log')
+
+# 配置日志
+logger = setup_logger(log_file_path)
+module_logger = logging.getLogger(__name__)
 
 # 创建全局实例
 engine = WorkflowEngine()
@@ -56,7 +60,7 @@ def register_all_nodes():
         # 获取节点配置中定义的type
         node_type = node_configs[class_name].get('type')
         if not node_type:
-            logger.warning(f"节点 {class_name} 未配置type字段，跳过注册")
+            module_logger.warning(f"节点 {class_name} 未配置type字段，跳过注册")
             continue
             
         # 从type生成模块名
@@ -68,9 +72,9 @@ def register_all_nodes():
             node_class = getattr(module, class_name)
             # 使用配置的type注册节点类型
             engine.register_node_type(node_type, node_class)
-            logger.info(f"成功注册节点类型: {node_type}")
+            module_logger.info(f"成功注册节点类型: {node_type}")
         except Exception as e:
-            logger.error(f"注册节点类型 {module_name} 失败: {str(e)}")
+            module_logger.error(f"注册节点类型 {module_name} 失败: {str(e)}")
             raise
 
 # 在应用启动时注册所有节点
@@ -163,7 +167,7 @@ class NodeResultResponse(BaseModel):
 @app.get("/health", response_model=ApiResponse)
 async def health_check():
     """健康检查接口"""
-    logger.debug("收到健康检查请求")
+    module_logger.debug("收到健康检查请求")
     return ApiResponse(
         event="health_check",
         success=True,
@@ -229,16 +233,16 @@ async def process_request(chat_id: str, text: str):
         chat_id: 聊天会话ID
         text: 用户输入的文本
     """
-    logger.info(f"[{chat_id}] 开始处理请求: {text[:100]}...")
+    module_logger.info(f"[{chat_id}] 开始处理请求: {text[:100]}...")
     try:
         # 开始生成工作流
-        logger.info(f"[{chat_id}] 开始生成工作流")
+        module_logger.info(f"[{chat_id}] 开始生成工作流")
         await stream_manager.send_message(chat_id, await create_status_event("generating", "正在生成工作流..."))
         workflow = await workflow_service.generate_workflow(text, chat_id)
         
         if not workflow or not workflow.get("nodes"):
             # 如果没有生成工作流，直接返回普通回答
-            logger.info(f"[{chat_id}] 无工作流生成，转为生成普通回答")
+            module_logger.info(f"[{chat_id}] 无工作流生成，转为生成普通回答")
             await stream_manager.send_message(chat_id, await create_status_event("answering", "正在生成回答..."))
             try:
                 messages = [
@@ -253,12 +257,12 @@ async def process_request(chat_id: str, text: str):
                     }))
                 await stream_manager.send_message(chat_id, await create_complete_event())
             except Exception as e:
-                logger.error(f"[{chat_id}] 生成回答时发生错误: {str(e)}", exc_info=True)
+                module_logger.error(f"[{chat_id}] 生成回答时发生错误: {str(e)}", exc_info=True)
                 await stream_manager.send_message(chat_id, await create_error_event("生成回答失败，请稍后重试"))
             return
             
         # 发送工作流定义
-        logger.info(f"[{chat_id}] 工作流生成成功，节点数: {len(workflow.get('nodes', []))}")
+        module_logger.info(f"[{chat_id}] 工作流生成成功，节点数: {len(workflow.get('nodes', []))}")
         await stream_manager.send_message(chat_id, await create_workflow_event(workflow))
         await asyncio.sleep(0.1)  # 添加小延迟使前端显示更流畅
         
@@ -267,7 +271,7 @@ async def process_request(chat_id: str, text: str):
         workflow_id = f"workflow-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         
         try:
-            logger.info(f"[{chat_id}] 开始执行工作流: {workflow_id}")
+            module_logger.info(f"[{chat_id}] 开始执行工作流: {workflow_id}")
             # 使用流式执行工作流
             # 执行工作流并处理结果流
             # 使用流式执行并实时发送结果
@@ -276,7 +280,7 @@ async def process_request(chat_id: str, text: str):
                 workflow_id,
                 {}
             ):
-                logger.info(f"[{chat_id}] 节点 {node_id} 执行状态: status={result.status} 执行结果：success={result.success}")
+                module_logger.info(f"[{chat_id}] 节点 {node_id} 执行状态: status={result.status} 执行结果：success={result.success}")
                 # 使用工具函数转换结果为可序列化的字典
                 result_dict = convert_node_result(node_id, result)
                 # 立即发送节点状态更新
@@ -286,7 +290,7 @@ async def process_request(chat_id: str, text: str):
                 await asyncio.sleep(0.01)
             
             # 获取工作流执行结果并生成说明
-            logger.info(f"[{chat_id}] 开始生成执行说明")
+            module_logger.info(f"[{chat_id}] 开始生成执行说明")
             workflow_results = engine.get_workflow_progress(workflow_id)
             async for chunk in workflow_service.explain_workflow_result(text, workflow, workflow_results, chat_id):
                 await stream_manager.send_message(chat_id, await create_explanation_event({
@@ -295,16 +299,16 @@ async def process_request(chat_id: str, text: str):
                     "data": chunk
                 }))
             await stream_manager.send_message(chat_id, await create_complete_event())
-            logger.info(f"[{chat_id}] 工作流执行完成")
+            module_logger.info(f"[{chat_id}] 工作流执行完成")
             
         except Exception as e:
             error_msg = f"执行工作流失败: {str(e)}"
-            logger.error(f"[{chat_id}] {error_msg}", exc_info=True)
+            module_logger.error(f"[{chat_id}] {error_msg}", exc_info=True)
             await stream_manager.send_message(chat_id, await create_error_event(error_msg))
             
     except Exception as e:
         error_msg = f"处理请求失败: {str(e)}"
-        logger.error(f"[{chat_id}] {error_msg}", exc_info=True)
+        module_logger.error(f"[{chat_id}] {error_msg}", exc_info=True)
         await stream_manager.send_message(chat_id, await create_error_event(error_msg))
 
 @app.post("/execute_workflow", response_model=ApiResponse)
@@ -321,13 +325,13 @@ async def execute_workflow(request: WorkflowRequest):
         ApiResponse: 包含工作流执行结果的统一响应
     """
     request_id = f"req-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    logger.info(f"[{request_id}] 收到执行工作流请求")
+    module_logger.info(f"[{request_id}] 收到执行工作流请求")
     try:
         workflow_id = f"workflow-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         
         # 记录工作流定义
         workflow_json = json.dumps(request.workflow, indent=2)
-        logger.info(f"[{request_id}] 工作流定义:\n{workflow_json}")
+        module_logger.info(f"[{request_id}] 工作流定义:\n{workflow_json}")
         
         # 发送工作流事件
         workflow_event = await create_workflow_event(request.workflow)
@@ -348,7 +352,7 @@ async def execute_workflow(request: WorkflowRequest):
         complete_event = await create_complete_event()
         events.append(complete_event)
         
-        logger.info(f"[{request_id}] 工作流执行完成")
+        module_logger.info(f"[{request_id}] 工作流执行完成")
         return ApiResponse(
             event="workflow_execution",
             success=True,
@@ -359,7 +363,7 @@ async def execute_workflow(request: WorkflowRequest):
         )
     except Exception as e:
         error_msg = f"执行工作流失败: {str(e)}"
-        logger.error(f"[{request_id}] {error_msg}", exc_info=True)
+        module_logger.error(f"[{request_id}] {error_msg}", exc_info=True)
         return ApiResponse(
             event="workflow_execution",
             success=False,
