@@ -40,28 +40,38 @@ PythonExecuteNode:
 
 ChatNode:
   type: "chat"
-  name: "AI对话"
-  description: "智能AI对话节点，基于大语言模型，支持自然语言理解、文本生成、知识问答等多种场景。可用于文本处理、内容生成、智能问答、数据分析等任务，支持上下文理解和多轮对话。"
+  name: "AI Chat"
+  description: "AI chat node based on large language models, supporting natural language understanding, text generation, knowledge Q&A, and more. Can be used for text processing, content generation, intelligent Q&A, data analysis, and other tasks with context understanding."
   output:
-    response: "AI的回复内容，包括生成的文本、分析结果或处理后的数据"
+    response: "AI response content, including generated text, analysis results, or processed data"
   params:
-    input:
+    user_question:
       type: "str"
       required: true
-      description: "输入文本，支持以下场景：
-        1. 自然语言问答：提供问题获取答案
-        2. 文本生成：创建文章、摘要、描述等
-        3. 代码生成：生成各种编程语言的代码
-        4. 数据分析：解析和分析文本数据
-        5. 文本转换：格式转换、翻译、改写等
-        6. 逻辑推理：进行推理、决策和问题解决"
+      description: "User's input question or prompt, supporting:
+        1. Natural language Q&A: Get answers to questions
+        2. Text generation: Create articles, summaries, descriptions
+        3. Code generation: Generate code in various languages
+        4. Data analysis: Parse and analyze text data
+        5. Text transformation: Format conversion, translation, rewriting
+        6. Logical reasoning: Perform reasoning, decision-making, and problem-solving"
+    system_prompt:
+      type: "str"
+      required: false
+      default: ""
+      description: "System instructions to guide the AI's behavior and set context. Can be used to:
+        1. Define AI's role and personality
+        2. Set specific rules or constraints
+        3. Provide background information
+        4. Specify output format requirements
+        5. Configure task-specific behaviors"
     temperature:
       type: "float"
       required: false
       default: 0.7
-      description: "温度参数(0-1)，控制输出的随机性：
-        - 较低的值(接近0)：输出更确定、保守
-        - 较高的值(接近1)：输出更多样、创造性"
+      description: "Temperature parameter (0-1) controlling output randomness:
+        - Lower values (near 0): More deterministic, conservative outputs
+        - Higher values (near 1): More diverse, creative outputs"
 
 FileReadNode:
   type: "file_read"
