@@ -135,7 +135,7 @@ class WorkflowEngine:
             tasks = []
             for n in downstream_nodes:
                 # 为下游节点添加context
-                n_with_context = {**n, "context": node.get("context", {})}
+                n_with_context = {**n, "context": context}
                 task = asyncio.create_task(
                     self._process_node(n_with_context, workflow_id, dependencies, nodes, results)
                 )
@@ -210,7 +210,7 @@ class WorkflowEngine:
                 # 直接处理下游节点
                 for n in downstream_nodes:
                     # 为下游节点添加context
-                    n_with_context = {**n, "context": node.get("context", {})}
+                    n_with_context = {**n, "context": context}
                     async for node_result in self._process_node_stream(
                         n_with_context, workflow_id, dependencies, nodes, results
                     ):

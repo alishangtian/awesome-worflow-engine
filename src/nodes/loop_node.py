@@ -75,12 +75,13 @@ class LoopNode(BaseNode):
             # 并行执行当前批次的任务
             logger.info(f"Executing batch {i//parallel_degree + 1} with {len(batch)} items")
             batch_results = await asyncio.gather(*tasks)
-            
             # 处理批次结果
             for result in batch_results:
+                item_result = dict()
                 for key, value in result.items():
                     if isinstance(value, NodeResult):
-                        results.append(value.to_data())
+                        item_result[key] = value.to_data()
+                results.append(item_result)
         execution_summary = {
             "results": results,  # 包含所有JSON格式的结果
             "total": len(array),  # 保持数字类型

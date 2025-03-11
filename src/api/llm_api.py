@@ -77,7 +77,7 @@ async def call_llm_api_stream(messages: List[Dict[str, str]], request_id: str = 
         
     # Configure larger buffer sizes for handling big response chunks
     conn = aiohttp.TCPConnector()
-    client_timeout = aiohttp.ClientTimeout(total=30)
+    client_timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(
         connector=conn,
         timeout=client_timeout,
@@ -166,7 +166,7 @@ async def call_llm_api(messages: List[Dict[str, str]], request_id: str = None, t
         
     # Use same optimized session configuration as streaming
     conn = aiohttp.TCPConnector()
-    client_timeout = aiohttp.ClientTimeout(total=30)
+    client_timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(
         connector=conn,
         timeout=client_timeout,

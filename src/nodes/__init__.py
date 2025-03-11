@@ -2,6 +2,7 @@
 
 __all__ = [
     'AddNode',
+    'ApiCallNode',
     'MultiplyNode',
     'ChatNode',
     'DbExecuteNode',

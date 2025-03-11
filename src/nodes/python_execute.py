@@ -6,6 +6,7 @@ import ast
 import inspect
 import importlib
 from typing import Dict, Any, Callable, List
+import black
 from .base import BaseNode
 
 class PythonExecuteNode(BaseNode):
@@ -15,6 +16,16 @@ class PythonExecuteNode(BaseNode):
         code = str(params.get("code", ""))
         if not code:
             raise ValueError("code参数不能为空")
+            
+        # 格式化代码
+        try:
+            code = black.format_str(code, mode=black.FileMode())
+        except Exception as e:
+            # 如果格式化失败，记录错误但继续使用原始代码
+            stderr_capture = io.StringIO()
+            print(f"代码格式化警告: {str(e)}", file=stderr_capture)
+            stderr = stderr_capture.getvalue()
+            print(f"Code formatting warning: {stderr}", file=sys.stderr)
         
         # 获取变量参数（函数执行参数）
         variables = params.get("variables", {})

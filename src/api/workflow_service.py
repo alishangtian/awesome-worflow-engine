@@ -67,9 +67,10 @@ class WorkflowService:
         
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt + "\n\n问题：" + text}
+            {"role": "user", "content":"问题：" + text  + "\n" + user_prompt}
         ]
         
+                
         workflow_str = await call_llm_api(messages, request_id)
         try:
             if "```json" in workflow_str:

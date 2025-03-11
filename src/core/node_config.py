@@ -93,8 +93,8 @@ class NodeConfigManager:
     
     def get_nodes_description(self) -> str:
         """
-        获取所有节点的描述信息
-        
+        获取所有节点的描述信息，以清晰、结构化的方式展示每个节点的功能和配置
+
         Returns:
             str: 格式化的节点描述字符串
         """
@@ -103,131 +103,193 @@ class NodeConfigManager:
             for node in self.get_all_nodes():
                 try:
                     node_type = node.get("type", "unknown")
-                    name = node.get("name", node_type)  # 如果没有name，使用type作为默认值
-                    description = node.get("description", "无描述")
+                    name = node.get("name", node_type)
+                    description = node.get("description", "No description available")
                     params = node.get("params", {})
                     output = node.get("output", {})
+                    config = node.get("config", {})
                     
-                    # 构建参数描述
+                    # 构建节点基本信息
+                    node_desc = [
+                        f"Node: {name}",
+                        f"Type: {node_type}",
+                        "-" * 50,
+                        "Description:",
+                        f"  {description}",
+                        ""
+                    ]
+
+                    # 构建配置信息（如果有）
+                    if config:
+                        node_desc.extend([
+                            "Configuration:",
+                            *[f"  {key}: {value}" for key, value in config.items()],
+                            ""
+                        ])
+
+                    # 构建输入参数描述
                     param_desc = []
                     for param_name, param_info in params.items():
                         if not isinstance(param_info, dict):
                             continue
                         
-                        # 获取参数的所有字段
                         param_type = param_info.get("type", "unknown")
                         required = param_info.get("required", False)
                         default = param_info.get("default", None)
-                        description = param_info.get("description", "无描述")
+                        param_description = param_info.get("description", "No description")
                         
-                        # 构建参数描述字符串
-                        param_str = f"* {param_name}: {description}"
-                        param_str += f" (类型: {param_type}"
+                        # 构建格式化的参数描述
+                        param_str = [
+                            f"  {param_name}:",
+                            f"    Type: {param_type}"
+                        ]
                         
-                        # 根据required字段决定是否显示default值
+                        # 添加必填/可选状态
                         if not required:
-                            param_str += f", 可选, 默认值: {default}"
+                            param_str.append(f"    Optional: Yes (Default: {default})")
                         else:
-                            param_str += ", 必填"
-                            
-                        param_str += ")"
-                        param_desc.append(param_str)
+                            param_str.append("    Required: Yes")
+                        
+                        # 添加参数描述（支持多行）
+                        desc_lines = param_description.split('\n')
+                        param_str.append("    Description:")
+                        param_str.extend([f"      {line.strip()}" for line in desc_lines])
+                        
+                        param_desc.extend(param_str)
                     
-                    # 构建输出描述
-                    output_desc = [f"* {key}: {value}" for key, value in output.items()]
+                    # 添加输入参数部分
+                    if param_desc:
+                        node_desc.extend([
+                            "Input Parameters:",
+                            *param_desc,
+                            ""
+                        ])
                     
-                    # 组合节点完整描述
-                    node_desc = [
-                        f"- {node_type}: {name}",
-                        f"  描述: {description}",
-                        "  参数:",
-                        *[f"  {p}" for p in param_desc],
-                        "  输出:",
-                        *[f"  {o}" for o in output_desc]
-                    ]
+                    # 添加输出参数部分
+                    if output:
+                        node_desc.extend([
+                            "Output Parameters:",
+                            *[f"  {key}:\n    Description: {value}" for key, value in output.items()],
+                            ""
+                        ])
+                    
+                    # 添加分隔线
+                    node_desc.append("=" * 80 + "\n")
+                    
                     node_descriptions.append("\n".join(node_desc))
                 except Exception as e:
                     print(f"处理节点 {node.get('type', 'unknown')} 描述时出错: {str(e)}")
                     continue
             
-            return "\n\n".join(node_descriptions)
+            return "\n".join(node_descriptions)
         except Exception as e:
             print(f"生成节点描述时出错: {str(e)}")
             return "获取节点描述失败"
     
     def get_nodes_json_example(self) -> str:
         """
-        获取节点配置的JSON示例
+        获取节点配置的JSON示例，展示一个实际的工作流场景
         
         Returns:
             str: JSON格式的工作流示例
         """
         workflow_json = {
             "nodes": [
-                # 第一层：两个并行的文本处理节点
+                # 第一层：搜索相关论文
                 {
-                    "id": "concat1",
-                    "type": "text_concat",
+                    "id": "arxiv_search",
+                    "type": "arxiv_search",
                     "params": {
-                        "text1": "Hello",
-                        "text2": "World",
-                        "separator": " "
+                        "query": "Large Language Models recent advances"
                     }
                 },
+                # 第二层：循环处理搜索结果
                 {
-                    "id": "concat2",
-                    "type": "text_concat",
+                    "id": "loop_papers",
+                    "type": "loop_node",
                     "params": {
-                        "text1": "Python",
-                        "text2": "DAG",
-                        "separator": " "
+                        "array": "${arxiv_search.results}",
+                        "workflow_json": {
+                            "nodes": [
+                                # 获取每篇论文的PDF内容
+                                {
+                                    "id": "crawler",
+                                    "type": "web_crawler",
+                                    "params": {
+                                        "url": "${item.pdf_url}"
+                                    }
+                                },
+                                # 使用AI分析论文内容
+                                {
+                                    "id": "paper_analysis",
+                                    "type": "chat",
+                                    "params": {
+                                        "system_prompt": "You are a research assistant. Analyze the given paper and extract key findings and contributions.",
+                                        "user_question": "Please analyze this paper and provide key findings:\n${crawler.content}",
+                                        "temperature": 0.3
+                                    }
+                                },
+                                # 保存分析结果到文件
+                                {
+                                    "id": "save_analysis",
+                                    "type": "file_write",
+                                    "params": {
+                                        "filename": "${item.entry_id}",
+                                        "content": "Title: ${item.title}\nAuthors: ${item.authors}\nAnalysis:\n${paper_analysis.response}",
+                                        "format": "txt"
+                                    }
+                                }
+                            ],
+                            "edges": [
+                                {"from": "crawler", "to": "paper_analysis"},
+                                {"from": "paper_analysis", "to": "save_analysis"}
+                            ]
+                        }
                     }
                 },
-                # 第二层：两个并行的数学运算节点
+                # 第三层：数据库操作
                 {
-                    "id": "add1",
-                    "type": "add",
+                    "id": "db_save",
+                    "type": "db_execute",
                     "params": {
-                        "num1": 10,
-                        "num2": 20
+                        "host": "localhost",
+                        "database": "research_db",
+                        "user": "researcher",
+                        "password": "password123",
+                        "statement": "INSERT INTO paper_analysis (paper_id, title, authors, analysis) VALUES (?, ?, ?, ?)",
+                        "parameters": ["${item.entry_id}", "${item.title}", "${item.authors}", "${paper_analysis.response}"]
                     }
                 },
+                # 第四层：执行Python代码进行数据分析
                 {
-                    "id": "add2",
-                    "type": "add",
+                    "id": "data_analysis",
+                    "type": "python_execute",
                     "params": {
-                        "num1": 30,
-                        "num2": 40
-                    }
-                },
-                # 第三层：基于前面节点结果的并行节点
-                {
-                    "id": "replace1",
-                    "type": "text_replace",
-                    "params": {
-                        "text": "$concat1.result",
-                        "old_str": "World",
-                        "new_str": "${concat2.result}"
-                    }
-                },
-                {
-                    "id": "multiply1",
-                    "type": "multiply",
-                    "params": {
-                        "num1": "${add1.result}",
-                        "num2": "${add2.result}"
+                        "code": """
+                        import pandas as pd
+                        import numpy as np
+                        
+                        def analyze_results(data):
+                            # 进行数据分析
+                            df = pd.DataFrame(data)
+                            summary = {
+                                'total_papers': len(df),
+                                'avg_length': df['analysis'].str.len().mean(),
+                                'key_topics': df['analysis'].str.lower().str.findall(r'\\w+').explode().value_counts().head(10).to_dict()
+                            }
+                            return summary
+                        """,
+                        "variables": {
+                            "data": "${loop_papers.results}"
+                        },
+                        "timeout": 60
                     }
                 }
             ],
             "edges": [
-                # concat1 -> replace1
-                {"from": "concat1", "to": "replace1"},
-                # concat2 -> replace1
-                {"from": "concat2", "to": "replace1"},
-                # add1 -> multiply1
-                {"from": "add1", "to": "multiply1"},
-                # add2 -> multiply1
-                {"from": "add2", "to": "multiply1"}
+                {"from": "arxiv_search", "to": "loop_papers"},
+                {"from": "loop_papers", "to": "db_save"},
+                {"from": "db_save", "to": "data_analysis"}
             ]
         }
         return json.dumps(workflow_json, indent=2, ensure_ascii=False)

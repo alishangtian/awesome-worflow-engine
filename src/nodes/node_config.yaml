@@ -4,7 +4,7 @@
 PythonExecuteNode:
   type: "python_execute"
   name: "Python函数执行"
-  description: "通用Python计算节点，支持执行自定义Python函数，可用于科学计算、数据处理、算法实现等多种场景。内置支持numpy、pandas等科学计算库，可实现复杂的数学运算、统计分析等功能。"
+  description: "通用Python代码执行节点，支持执行自定义Python函数，可用于科学计算、数据处理、算法实现等多种场景。内置支持numpy、pandas等科学计算库，可实现复杂的数学运算、统计分析等功能。"
   output:
     result: "函数执行结果"
     stdout: "标准输出内容"
@@ -16,7 +16,9 @@ PythonExecuteNode:
     code:
       type: "str"
       required: true
-      description: "要执行的Python函数定义代码。支持以下场景：
+      description: "要执行的Python函数定义代码。
+        切记：代码的缩进和换行格式必须正确，否则会导致执行失败
+        支持以下场景：
         1. 数学计算：可使用numpy进行矩阵运算、统计分析等
         2. 数据处理：可使用pandas进行数据清洗、转换、分析等
         3. 科学计算：支持scipy进行积分、优化、信号处理等
@@ -40,38 +42,40 @@ PythonExecuteNode:
 
 ChatNode:
   type: "chat"
-  name: "AI Chat"
-  description: "AI chat node based on large language models, supporting natural language understanding, text generation, knowledge Q&A, and more. Can be used for text processing, content generation, intelligent Q&A, data analysis, and other tasks with context understanding."
+  name: "AI对话"
+  description: "基于大语言模型的AI对话节点，支持自然语言理解、文本生成、知识问答等功能。
+                可用于文本处理、内容生成、智能问答、数据分析等需要上下文理解的任务。
+                切记：上下文内容只支持纯文本，不能是对象，如果是对象，需要将对象的文本字段进行拼接"
   output:
-    response: "AI response content, including generated text, analysis results, or processed data"
+    response: "AI响应内容，包括生成的文本、分析结果或处理后的数据"
   params:
     user_question:
       type: "str"
       required: true
-      description: "User's input question or prompt, supporting:
-        1. Natural language Q&A: Get answers to questions
-        2. Text generation: Create articles, summaries, descriptions
-        3. Code generation: Generate code in various languages
-        4. Data analysis: Parse and analyze text data
-        5. Text transformation: Format conversion, translation, rewriting
-        6. Logical reasoning: Perform reasoning, decision-making, and problem-solving"
+      description: "用户输入的问题或提示，支持：
+        1. 自然语言问答：获取问题答案
+        2. 文本生成：创建文章、摘要、描述
+        3. 代码生成：生成各种编程语言的代码
+        4. 数据分析：解析和分析文本数据
+        5. 文本转换：格式转换、翻译、改写
+        6. 逻辑推理：执行推理、决策和问题解决"
     system_prompt:
       type: "str"
       required: false
       default: ""
-      description: "System instructions to guide the AI's behavior and set context. Can be used to:
-        1. Define AI's role and personality
-        2. Set specific rules or constraints
-        3. Provide background information
-        4. Specify output format requirements
-        5. Configure task-specific behaviors"
+      description: "系统指令，用于指导AI的行为和设置上下文。可用于：
+        1. 定义AI的角色和个性
+        2. 设置特定规则或约束
+        3. 提供背景信息
+        4. 指定输出格式要求
+        5. 配置任务特定行为"
     temperature:
       type: "float"
       required: false
       default: 0.7
-      description: "Temperature parameter (0-1) controlling output randomness:
-        - Lower values (near 0): More deterministic, conservative outputs
-        - Higher values (near 1): More diverse, creative outputs"
+      description: "温度参数(0-1)控制输出的随机性：
+        - 较低的值(接近0)：更确定性、保守的输出
+        - 较高的值(接近1)：更多样化、创造性的输出"
 
 FileReadNode:
   type: "file_read"
@@ -231,7 +235,7 @@ LoopNode:
   name: "循环执行节点"
   description: "循环执行节点，支持对数组进行循环，并执行指定的工作流。工作流中可以通过引用表达式访问循环项的上下文变量。"
   output:
-    results: "循环执行的结果列表"
+    results: "循环执行的结果列表，数组类型，每个子元素包含工作流执行结果，工作流执行结果包含所有节点的结果"
     total: "循环执行的总次数"
     success: "是否全部执行成功"
   params:
@@ -332,3 +336,37 @@ SerperWebCrawlerNode:
       type: "str"
       required: true
       description: "需要抓取的网页URL"
+
+ApiCallNode:
+  type: "api_call"
+  name: "API调用"
+  description: "通用API调用节点，支持Bearer Token认证，可用于调用各类REST API接口"
+  output:
+    status: "HTTP状态码"
+    success: "是否调用成功"
+    data: "响应数据"
+    headers: "响应头"
+    error: "错误信息(如果有)"
+  params:
+    url:
+      type: "str"
+      required: true
+      description: "API接口地址"
+    method:
+      type: "str"
+      required: true
+      description: "HTTP请求方法(GET, POST, PUT, DELETE等)"
+    headers:
+      type: "dict"
+      required: false
+      default: {}
+      description: "请求头，键值对格式"
+    body:
+      type: "dict"
+      required: false
+      default: {}
+      description: "请求体数据，JSON格式"
+    bearer_token:
+      type: "str"
+      required: false
+      description: "Bearer Token认证令牌"
