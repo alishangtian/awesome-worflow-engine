@@ -3,7 +3,7 @@
 from typing import Dict, Any
 import aiomysql
 from .base import BaseNode
-
+ 
 class DbQueryNode(BaseNode):
     """数据库查询节点（MySQL）"""
     

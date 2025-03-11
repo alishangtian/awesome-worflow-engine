@@ -73,9 +73,38 @@ h1 {
 .workflow-info {
     background: #f0f8ff;
     margin: 10px 0;
-    padding: 10px;
     border-radius: 4px;
     border-left: 4px solid #3498db;
+}
+.workflow-header {
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+.workflow-header::after {
+    content: '▼';
+    font-size: 12px;
+    transition: transform 0.3s ease;
+}
+.workflow-info.collapsed .workflow-header::after {
+    transform: rotate(-90deg);
+}
+.workflow-content {
+    padding: 0 10px 10px;
+    transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+    max-height: 300px;
+    opacity: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+.workflow-info.collapsed .workflow-content {
+    max-height: 0;
+    opacity: 0;
+    padding: 0 10px;
+    overflow: hidden;
 }
 .status-message {
     color: #666;
@@ -112,19 +141,20 @@ h1 {
 .running-indicator {
     display: flex;
     align-items: center;
-    color: #666;
+    color: #888;
     font-style: italic;
+    font-size: 14px;
 }
 .running-indicator::after {
     content: '';
     display: inline-block;
-    width: 12px;
-    height: 12px;
-    margin-left: 8px;
-    border: 2px solid #f39c12;
+    width: 8px;
+    height: 8px;
+    margin-left: 6px;
+    border: 1.5px solid #f39c12;
     border-radius: 50%;
     border-top-color: transparent;
-    animation: spin 1s linear infinite;
+    animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 @keyframes spin {
     to {
@@ -134,11 +164,37 @@ h1 {
 .node-result .node-header {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     margin-bottom: 5px;
     color: #666;
+    cursor: pointer;
+    user-select: none;
+}
+.node-result .node-header::after {
+    content: '▼';
+    font-size: 12px;
+    transition: transform 0.3s ease;
+}
+.node-result.collapsed .node-header::after {
+    transform: rotate(-90deg);
 }
 .node-result .node-content {
     margin-top: 5px;
+    transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+    max-height: 300px;
+    opacity: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+.node-result.collapsed .node-content {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    overflow: hidden;
+}
+.node-result pre {
+    margin: 0;
+    overflow-x: auto;
 }
 pre {
     white-space: pre-wrap;
@@ -222,6 +278,7 @@ pre {
 }
 #conversation-history {
     flex: 1;
-    overflow-y: hidden;
+    overflow-y: auto;
     margin-bottom: 20px;
+    padding-right: 10px;
 }

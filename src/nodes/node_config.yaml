@@ -45,14 +45,14 @@ ChatNode:
   name: "AI对话"
   description: "基于大语言模型的AI对话节点，支持自然语言理解、文本生成、知识问答等功能。
                 可用于文本处理、内容生成、智能问答、数据分析等需要上下文理解的任务。
-                切记：上下文内容只支持纯文本，不能是对象，如果是对象，需要将对象的文本字段进行拼接"
+                切记：上下文内容只支持纯文本，不能是对象，如果是对象，需要将对象的文本字段进行拼接之后才能传给模型进行文本生成"
   output:
     response: "AI响应内容，包括生成的文本、分析结果或处理后的数据"
   params:
     user_question:
       type: "str"
       required: true
-      description: "用户输入的问题或提示，支持：
+      description: "用户输入的问题、提示和上下文参考信息，支持：
         1. 自然语言问答：获取问题答案
         2. 文本生成：创建文章、摘要、描述
         3. 代码生成：生成各种编程语言的代码
@@ -256,7 +256,7 @@ LoopNode:
 SerperSearchNode:
   type: "serper_search"
   name: "Serper搜索引擎"
-  description: "Serper搜索引擎节点"
+  description: "Serper搜索引擎节点，可以搜索一些时下最新的信息，如新闻、论坛、博客等"
   output:
     success: "搜索是否成功"
     results: "搜索结果列表，数组类型，每条结果包含字段为：title、link和snippet，如果需要网页正文内容，需要通过link爬取，这里只提供全文概要字段snippet"

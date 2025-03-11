@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (existingNode) {
             // 更新现有节点
             existingNode.className = `node-result ${statusClass}`;
+            const wasCollapsed = existingNode.classList.contains('collapsed');
             existingNode.innerHTML = `
                 <div class="node-header">
                     <span>节点: ${data.node_id}</span>
@@ -92,6 +93,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="node-content">${content}</div>
             `;
+            if (wasCollapsed || data.status === 'completed') {
+                existingNode.classList.add('collapsed');
+            }
         } else {
             // 创建新节点
             const nodeDiv = document.createElement('div');
@@ -104,7 +108,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="node-content">${content}</div>
             `;
+            // 如果节点执行完成，默认折叠
+            if (data.status === 'completed') {
+                nodeDiv.classList.add('collapsed');
+            }
             container.appendChild(nodeDiv);
+        }
+        
+        // 添加点击事件处理
+        const nodeHeader = container.querySelector(`[data-node-id="${data.node_id}"] .node-header`);
+        if (nodeHeader) {
+            nodeHeader.onclick = function() {
+                this.closest('.node-result').classList.toggle('collapsed');
+            };
         }
     }
 
@@ -211,12 +227,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const workflow = JSON.parse(event.data);
                     const workflowDiv = document.createElement('div');
-                    workflowDiv.className = 'workflow-info';
+                    workflowDiv.className = 'workflow-info collapsed';
                     workflowDiv.innerHTML = `
-                        <div>工作流已生成: ${workflow.nodes.length} 个节点</div>
-                        <pre>${JSON.stringify(workflow, null, 2)}</pre>
+                        <div class="workflow-header">
+                            <span>工作流已生成: ${workflow.nodes.length} 个节点</span>
+                        </div>
+                        <div class="workflow-content">
+                            <pre>${JSON.stringify(workflow, null, 2)}</pre>
+                        </div>
                     `;
                     answerElement.appendChild(workflowDiv);
+                    
+                    // Add click handler for workflow header
+                    const workflowHeader = workflowDiv.querySelector('.workflow-header');
+                    if (workflowHeader) {
+                        workflowHeader.onclick = function() {
+                            workflowDiv.classList.toggle('collapsed');
+                        };
+                    }
                 } catch (error) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'error';

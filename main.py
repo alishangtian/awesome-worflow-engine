@@ -290,14 +290,14 @@ async def process_request(chat_id: str, text: str):
                 await asyncio.sleep(0.01)
             
             # 获取工作流执行结果并生成说明
-            module_logger.info(f"[{chat_id}] 开始生成执行说明")
-            workflow_results = engine.get_workflow_progress(workflow_id)
-            async for chunk in workflow_service.explain_workflow_result(text, workflow, workflow_results, chat_id):
-                await stream_manager.send_message(chat_id, await create_explanation_event({
-                    "event": "explanation",
-                    "success": True,
-                    "data": chunk
-                }))
+            # module_logger.info(f"[{chat_id}] 开始生成执行说明")
+            # workflow_results = engine.get_workflow_progress(workflow_id)
+            # async for chunk in workflow_service.explain_workflow_result(text, workflow, workflow_results, chat_id):
+            #     await stream_manager.send_message(chat_id, await create_explanation_event({
+            #         "event": "explanation",
+            #         "success": True,
+            #         "data": chunk
+            #     }))
             await stream_manager.send_message(chat_id, await create_complete_event())
             module_logger.info(f"[{chat_id}] 工作流执行完成")
             

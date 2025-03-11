@@ -28,6 +28,59 @@ def calculate_messages_length(messages: List[Dict[str, str]]) -> int:
         total_length += len(message.get("content", ""))
     return total_length
 
+def truncate_messages(messages: List[Dict[str, str]], max_length: int = 100000) -> List[Dict[str, str]]:
+    """
+    如果消息总长度超过max_length，则只截断用户消息的content
+    
+    Args:
+        messages: 消息列表
+        max_length: 最大允许的总字符长度
+    
+    Returns:
+        截断后的消息列表
+    """
+    if not messages:
+        return messages
+        
+    # 如果总长度在限制内，直接返回原始消息
+    total_length = calculate_messages_length(messages)
+    if total_length <= max_length:
+        return messages
+    
+    # 计算需要截断的长度
+    excess_length = total_length - max_length
+    
+    # 获取所有用户消息
+    user_messages = [msg for msg in messages if msg.get("role") == "user" and msg.get("content")]
+    if not user_messages:
+        return messages
+        
+    # 计算每条用户消息需要截断的平均长度
+    truncate_per_message = excess_length // len(user_messages)
+    
+    # 创建新的消息列表，截断content
+    truncated = []
+    remaining_excess = excess_length
+    
+    for msg in messages:
+        if msg.get("role") == "user" and msg.get("content") and remaining_excess > 0:
+            # 只截断用户消息的content
+            content = msg["content"]
+            # 确保至少保留一半的内容
+            content_length = max(len(content) - truncate_per_message, len(content) // 2)
+            truncated.append({
+                **msg,
+                "content": content[:content_length]
+            })
+            remaining_excess -= (len(content) - content_length)
+        else:
+            truncated.append(msg)
+    
+    logger.info(
+        f"消息长度({total_length})超过{max_length}字符限制，已按比例截断用户消息内容"
+    )
+    return truncated
+
 def select_model(messages: List[Dict[str, str]], request_id: str = None) -> str:
     """
     根据消息长度选择合适的模型
@@ -64,6 +117,8 @@ async def call_llm_api_stream(messages: List[Dict[str, str]], request_id: str = 
     """
     
     logger.info(f"[{request_id}] 开始流式调用llm API")
+
+    messages = truncate_messages(messages)
     
     # 根据消息长度选择模型
     model = select_model(messages, request_id)
@@ -151,6 +206,8 @@ async def call_llm_api(messages: List[Dict[str, str]], request_id: str = None, t
         返回完整响应字符串
     """
     logger.info(f"[{request_id}] 开始调用llm API")
+
+    messages = truncate_messages(messages)
     
     # 根据消息长度选择模型
     model = select_model(messages, request_id)

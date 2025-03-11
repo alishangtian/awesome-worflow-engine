@@ -18,7 +18,6 @@ class LoopNode(BaseNode):
         self._engine = engine
         
     async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info(f"Starting loop execution with params: {params}")
         array = params.get("array", [])
         workflow_json = params.get("workflow_json")
         
