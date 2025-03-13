@@ -3,7 +3,12 @@
 import yaml
 import os
 import json
-from typing import Dict, Optional, List
+import logging
+from typing import Dict, Optional, List, Type
+from ..agent.agent import Tool
+from ..nodes.base import BaseNode
+
+logger = logging.getLogger(__name__)
 
 class NodeConfigManager:
     """节点配置管理类"""
@@ -28,6 +33,7 @@ class NodeConfigManager:
         
         self.config_path = config_path
         self.node_configs = self._load_config()
+        self._node_types: Dict[str, Type[BaseNode]] = {}
     
     def _load_config(self) -> Dict:
         """加载节点配置"""
@@ -45,29 +51,21 @@ class NodeConfigManager:
         获取节点配置信息
         
         Args:
-            node_type: 节点类型（下划线格式，如 text_concat）
+            node_type: 节点类型
             
         Returns:
             节点配置信息，如果节点不存在则返回None
         """
-        # 转换节点类型为类名，例如: text_concat -> TextConcatNode
-        parts = node_type.split('_')
-        class_name = ''.join(part.capitalize() for part in parts)
-        if not class_name.endswith('Node'):
-            class_name += 'Node'
-        
-        config = self.node_configs.get(class_name)
-        if config is not None:
-            return {
-                "type": node_type,
-                **config
-            }
+        # 遍历配置查找匹配的节点类型
+        for config in self.node_configs.values():
+            if isinstance(config, dict) and config.get("type") == node_type:
+                return config
         return None
-
+ 
     def get_all_nodes(self) -> List[Dict]:
         """
         获取所有节点的配置信息
-        
+         
         Returns:
             所有节点的配置信息列表
         """
@@ -77,19 +75,95 @@ class NodeConfigManager:
             if not isinstance(config, dict):
                 print(f"警告: 节点 {class_name} 的配置无效")
                 continue
-                
-            # 转换类名为节点类型，例如: TextConcatNode -> text_concat
-            if class_name.endswith('Node'):
-                class_name = class_name[:-4]  # 移除 'Node' 后缀
-            
-            # 转换驼峰命名为下划线命名
-            node_type = ''.join(['_' + c.lower() if c.isupper() else c.lower() for c in class_name]).lstrip('_')
-                
-            nodes.append({
-                "type": node_type,  # 使用转换后的类型名称
-                **config
-            })
+            # 直接使用配置中的type字段
+            nodes.append(config)
         return nodes
+        
+    def register_node_type(self, type_name: str, node_class):
+        """注册节点类型
+        
+        Args:
+            type_name: 节点类型名称
+            node_class: 节点类
+        """
+        self._node_types[type_name] = node_class
+
+        
+    def get_tools(self) -> List[Tool]:
+        """
+        将现有节点转换为Agent可用的工具列表
+        
+        Returns:
+            List[Tool]: Tool对象列表，每个Tool包含name、description、parameters、outputs和run方法
+        """
+        tools = []
+        nodes = self.get_all_nodes()
+        
+        for node_info in nodes:
+            node_type = node_info.get("type")
+            description = node_info.get("description", "No description available")
+            
+            # 获取参数信息
+            params = node_info.get("params", {})
+            param_descriptions = []
+            for param_name, param_info in params.items():
+                if isinstance(param_info, dict):
+                    param_type = param_info.get("type", "unknown")
+                    required = param_info.get("required", False)
+                    default = param_info.get("default", None)
+                    param_desc = param_info.get("description", "No description")
+                    
+                    param_str = f"- {param_name} ({param_type})"
+                    if required:
+                        param_str += " [Required]"
+                    else:
+                        param_str += f" [Optional, Default: {default}]"
+                    param_str += f": {param_desc}"
+                    param_descriptions.append(param_str)
+            
+            # 获取输出信息
+            outputs = node_info.get("output", {})
+            output_descriptions = []
+            for output_name, output_desc in outputs.items():
+                output_descriptions.append(f"- {output_name}: {output_desc}")
+            
+            # 组合完整描述
+            full_description = description + "\n\n"
+            if param_descriptions:
+                full_description += "Parameters:\n" + "\n".join(param_descriptions) + "\n\n"
+            if output_descriptions:
+                full_description += "Outputs:\n" + "\n".join(output_descriptions)
+            
+            # 获取节点类
+            node_class = self._node_types.get(node_type)
+            if not node_class:
+                continue
+            
+            # 创建一个闭包来保存node_class和node_info
+            def create_tool_runner(node_class, node_info):
+                async def run(input_text: str) -> str:
+                    try:
+                        node_instance = node_class()
+                        result = await node_instance.execute(input_text)
+                        return result
+                    except Exception as e:
+                        return f"Error executing node: {str(e)}"
+                return run
+            
+            # 获取参数和输出定义
+            params = node_info.get("params", {})
+            outputs = node_info.get("output", {})
+
+            tool = Tool(
+                name=node_type, # 使用节点类型作为工具名称
+                description=description,  # 只使用基本描述
+                run=create_tool_runner(node_class, node_info),
+                is_async=True,
+                params=params,  # 直接传递参数定义
+                outputs=outputs  # 直接传递输出定义
+            )
+            tools.append(tool)
+        return tools
     
     def get_nodes_description(self) -> str:
         """

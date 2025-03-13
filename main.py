@@ -8,6 +8,7 @@ import asyncio
 from datetime import datetime
 from typing import Dict, Any, Optional, Union, AsyncGenerator
 from fastapi import FastAPI, HTTPException, Request, Body
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from sse_starlette.sse import EventSourceResponse
@@ -21,12 +22,12 @@ from src.api.workflow_service import WorkflowService
 from src.api.stream_manager import StreamManager
 from src.api.events import (
     create_status_event, create_workflow_event, create_result_event,
-    create_explanation_event, create_answer_event, create_complete_event,
+    create_answer_event, create_complete_event,
     create_error_event
 )
 from src.api.utils import convert_node_result
 from src.api.llm_api import call_llm_api_stream
- 
+from src.agent.agent import Agent
 # 加载环境变量
 from dotenv import load_dotenv
 load_dotenv()
@@ -42,6 +43,7 @@ module_logger = logging.getLogger(__name__)
 engine = WorkflowEngine()
 workflow_service = WorkflowService(engine)
 stream_manager = StreamManager()
+node_manager = NodeConfigManager()
 
 # 注册节点状态回调
 def node_status_callback(workflow_id: str, node_id: str, result: NodeResult):
@@ -53,7 +55,6 @@ engine.register_node_callback(node_status_callback)
 # 在启动时注册所有节点类型
 def register_all_nodes():
     """注册所有可用的节点类型"""
-    node_manager = NodeConfigManager()
     node_configs = node_manager.node_configs
     
     for class_name in node_configs.keys():
@@ -72,7 +73,7 @@ def register_all_nodes():
             node_class = getattr(module, class_name)
             # 使用配置的type注册节点类型
             engine.register_node_type(node_type, node_class)
-            module_logger.info(f"成功注册节点类型: {node_type}")
+            node_manager.register_node_type(node_type, node_class)
         except Exception as e:
             module_logger.error(f"注册节点类型 {module_name} 失败: {str(e)}")
             raise
@@ -80,49 +81,16 @@ def register_all_nodes():
 # 在应用启动时注册所有节点
 register_all_nodes()
 
-app = FastAPI(
-    title="Workflow Engine API",
-    description="""
-    基于DAG的工作流执行引擎API
-    
-    ## 功能特点
-    - 支持多种节点类型：文本处理、数学运算、LLM对话等
-    - 支持节点间数据流转
-    - 支持自然语言输入自动生成工作流
-    
-    ## 使用示例
-    
-    ### 1. 执行简单的数学运算工作流
-    ```json
-    {
-        "workflow": {
-            "nodes": [
-                {
-                    "id": "add1",
-                    "type": "add",
-                    "params": {"num1": 10, "num2": 20}
-                },
-                {
-                    "id": "multiply1",
-                    "type": "multiply",
-                    "params": {
-                        "num1": "$add1.result",
-                        "num2": 2
-                    }
-                }
-            ],
-            "edges": [
-                {"from": "add1", "to": "multiply1"}
-            ]
-        }
-    }
-    ```
-    
-    ### 2. 使用自然语言接口
-    发送请求：`"计算(10+20)*2"`
-    系统会自动生成并执行上述工作流
-    """,
-    version="1.0.0"
+app = FastAPI(title="Workflow Engine API",version="1.0.0")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+    expose_headers=["*"]
 )
 
 # 挂载静态文件目录
@@ -187,7 +155,7 @@ class NaturalLanguageResponse(BaseModel):
     content: Union[str, Dict[str, Any]]
 
 @app.post("/chat")
-async def create_chat(text: str = Body(..., embed=True)):
+async def create_chat(text: str = Body(..., embed=True),model: str = Body(..., embed=True)):
     """创建新的聊天会话
     
     Args:
@@ -199,9 +167,15 @@ async def create_chat(text: str = Body(..., embed=True)):
     chat_id = f"chat-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     stream_manager.create_stream(chat_id)
     
-    # 启动异步任务处理用户请求
-    asyncio.create_task(process_request(chat_id, text))
-    
+    if model == "workflow":
+        # 启动工作流异步任务处理用户请求
+        asyncio.create_task(process_workflow(chat_id, text))
+    elif model == "agent":
+        # 启动智能体异步任务处理用户请求
+        asyncio.create_task(process_agent(chat_id, text))
+    else:
+        raise HTTPException(status_code=400, detail="Invalid model type")
+        
     return {
         "success": True,
         "chat_id": chat_id
@@ -226,7 +200,7 @@ async def stream_request(chat_id: str):
             
     return EventSourceResponse(event_generator())
 
-async def process_request(chat_id: str, text: str):
+async def process_workflow(chat_id: str, text: str):
     """处理用户请求的异步函数
     
     Args:
@@ -311,6 +285,37 @@ async def process_request(chat_id: str, text: str):
         module_logger.error(f"[{chat_id}] {error_msg}", exc_info=True)
         await stream_manager.send_message(chat_id, await create_error_event(error_msg))
 
+async def process_agent(chat_id: str, text: str):
+    """处理Agent请求的异步函数
+    
+    Args:
+        chat_id: 聊天会话ID
+        text: 用户输入的文本
+    """
+    module_logger.info(f"[{chat_id}] 开始处理Agent请求: {text[:100]}...")
+    try:
+        # 获取工具集合并实例化Agent，传入stream_manager
+        tools = node_manager.get_tools()
+        agent = Agent(tools=tools, stream_manager=stream_manager)
+        
+        # 开始处理Agent请求
+        await stream_manager.send_message(chat_id, await create_status_event("agent_processing", "正在处理Agent请求..."))
+        
+        # 调用Agent的run方法，启用stream功能
+        result = await agent.run(text, chat_id)
+        
+        # 发送最终结果
+        await stream_manager.send_message(chat_id, await create_answer_event({
+            "event": "agent_response",
+            "success": True,
+            "data": result
+        }))
+        
+        await stream_manager.send_message(chat_id, await create_complete_event())
+    except Exception as e:
+        error_msg = f"处理Agent请求失败: {str(e)}"
+        module_logger.error(f"[{chat_id}] {error_msg}", exc_info=True)
+        await stream_manager.send_message(chat_id, await create_error_event(error_msg))
 @app.post("/execute_workflow", response_model=ApiResponse)
 async def execute_workflow(request: WorkflowRequest):
     """

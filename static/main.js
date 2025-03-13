@@ -186,12 +186,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // 先发送POST请求创建chat会话
+            const modelSelect = document.getElementById('model-select');
+            const selectedModel = modelSelect.value;
+            
             const response = await fetch('/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ text })
+                body: JSON.stringify({ 
+                    text,
+                    model: selectedModel
+                })
             });
             
             if (!response.ok) {
@@ -290,6 +296,156 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } catch (error) {
                     answerElement.innerHTML += `<div class="error">解析回答失败</div>`;
+                }
+            });
+
+            // 处理工具进度事件
+            eventSource.addEventListener('tool_progress', event => {
+                try {
+                    const data = JSON.parse(event.data);
+                    const progressDiv = document.createElement('div');
+                    progressDiv.className = 'tool-progress';
+                    progressDiv.innerHTML = `
+                        <div class="tool-header">
+                            <span>工具: ${data.tool}</span>
+                            <span class="tool-status ${data.status}">${data.status === 'success' ? '成功' : '执行中'}</span>
+                        </div>
+                    `;
+                    answerElement.appendChild(progressDiv);
+                } catch (error) {
+                    console.error('解析工具进度失败:', error);
+                }
+            });
+
+            // 处理工具重试事件
+            eventSource.addEventListener('tool_retry', event => {
+                try {
+                    const data = JSON.parse(event.data);
+                    const retryDiv = document.createElement('div');
+                    retryDiv.className = 'tool-retry';
+                    retryDiv.innerHTML = `
+                        <div class="retry-info">
+                            <span>工具 ${data.tool} 重试中 (${data.attempt}/${data.max_retries})</span>
+                            <span class="retry-error">${data.error}</span>
+                        </div>
+                    `;
+                    answerElement.appendChild(retryDiv);
+                } catch (error) {
+                    console.error('解析工具重试失败:', error);
+                }
+            });
+
+            // 处理action开始事件
+            eventSource.addEventListener('action_start', event => {
+                try {
+                    const data = JSON.parse(event.data);
+                    const startDiv = document.createElement('div');
+                    startDiv.className = 'action-start';
+                    startDiv.innerHTML = `
+                        <div class="action-info">
+                            <span class="action-name">${data.action}</span>
+                            ${data.input ? `<div class="tool-result"><pre>${JSON.stringify(data.input)}</pre></div>` : ''}
+                            <span class="action-timestamp">${new Date(data.timestamp * 1000).toLocaleTimeString()}</span>
+                        </div>
+                    `;
+                    answerElement.appendChild(startDiv);
+                } catch (error) {
+                    console.error('解析action开始事件失败:', error);
+                }
+            });
+
+            // 处理action完成事件
+            eventSource.addEventListener('action_complete', event => {
+                try {
+                    const data = JSON.parse(event.data);
+                    const completeDiv = document.createElement('div');
+                    completeDiv.className = 'action-complete';
+                    completeDiv.innerHTML = `
+                        <div class="action-result">
+                            <span class="action-check">✓</span>
+                            <pre class="action-output">${data.result}</pre>
+                            <span class="action-timestamp">${new Date(data.timestamp * 1000).toLocaleTimeString()}</span>
+                        </div>
+                    `;
+                    answerElement.appendChild(completeDiv);
+                } catch (error) {
+                    console.error('解析action完成事件失败:', error);
+                }
+            });
+
+            // 处理agent开始事件
+            eventSource.addEventListener('agent_start', event => {
+                try {
+                    const data = JSON.parse(event.data);
+                    const startDiv = document.createElement('div');
+                    startDiv.className = 'agent-start';
+                    startDiv.innerHTML = `
+                        <div class="agent-info">
+                            <span class="agent-status">Agent开始处理查询</span>
+                            <span class="agent-query">${data.query}</span>
+                            <span class="agent-timestamp">${new Date(data.timestamp * 1000).toLocaleTimeString()}</span>
+                        </div>
+                    `;
+                    answerElement.appendChild(startDiv);
+                } catch (error) {
+                    console.error('解析agent开始事件失败:', error);
+                }
+            });
+
+            // 处理agent思考事件
+            eventSource.addEventListener('agent_thinking', event => {
+                try {
+                    const data = JSON.parse(event.data);
+                    const thinkingDiv = document.createElement('div');
+                    thinkingDiv.className = 'agent-thinking';
+                    thinkingDiv.innerHTML = `
+                        <div class="thinking-info">
+                            <span class="thinking-indicator"></span>
+                            <span class="thinking-content">${data.thought}</span>
+                            <span class="thinking-timestamp">${new Date(data.timestamp * 1000).toLocaleTimeString()}</span>
+                        </div>
+                    `;
+                    answerElement.appendChild(thinkingDiv);
+                } catch (error) {
+                    console.error('解析agent思考事件失败:', error);
+                }
+            });
+
+            // 处理agent错误事件
+            eventSource.addEventListener('agent_error', event => {
+                try {
+                    const data = JSON.parse(event.data);
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'agent-error';
+                    errorDiv.innerHTML = `
+                        <div class="error-info">
+                            <span class="error-icon">⚠️</span>
+                            <span class="error-message">${data.error}</span>
+                            <span class="error-timestamp">${new Date(data.timestamp * 1000).toLocaleTimeString()}</span>
+                        </div>
+                    `;
+                    answerElement.appendChild(errorDiv);
+                } catch (error) {
+                    console.error('解析agent错误事件失败:', error);
+                }
+            });
+
+            // 处理agent完成事件
+            eventSource.addEventListener('agent_complete', event => {
+                try {
+                    const data = JSON.parse(event.data);
+                    const completeDiv = document.createElement('div');
+                    completeDiv.className = 'agent-complete';
+                    completeDiv.innerHTML = `
+                        <div class="complete-info">
+                            <span class="complete-icon">✓</span>
+                            <span class="complete-message">${data.result}</span>
+                            <span class="complete-timestamp">${new Date(data.timestamp * 1000).toLocaleTimeString()}</span>
+                        </div>
+                    `;
+                    answerElement.appendChild(completeDiv);
+                } catch (error) {
+                    console.error('解析agent完成事件失败:', error);
                 }
             });
 

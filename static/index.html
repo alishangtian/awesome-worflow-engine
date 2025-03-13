@@ -12,6 +12,10 @@
     <div class="container">
         <div id="conversation-history"></div>
         <div class="input-container">
+            <select id="model-select">
+                <option value="workflow">工作流模式</option>
+                <option value="agent">智能体模式</option>
+            </select>
             <input type="text" autocomplete="off" id="user-input" placeholder="请输入您的问题..." autofocus>
             <button id="send-button">发送</button>
         </div>

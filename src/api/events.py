@@ -1,6 +1,7 @@
 """事件生成模块"""
 
 import json
+import time
 from typing import Any, Dict
 
 class EventType:
@@ -12,6 +13,16 @@ class EventType:
     ANSWER = "answer"
     COMPLETE = "complete"
     ERROR = "error"
+    ACTION_START = "action_start"
+    ACTION_END = "action_end"
+    ACTION_ERROR = "action_error"
+    ACTION_COMPLETE = "action_complete"
+    TOOL_PROGRESS = "tool_progress"  # 工具执行进度事件
+    TOOL_RETRY = "tool_retry"  # 工具重试事件
+    AGENT_START = "agent_start"  # agent开始执行事件
+    AGENT_COMPLETE = "agent_complete"  # agent执行完成事件
+    AGENT_ERROR = "agent_error"  # agent执行错误事件
+    AGENT_THINKING = "agent_thinking"  # agent思考事件
 
 async def create_event(event_type: str, data: Any) -> Dict:
     """统一的事件创建函数
@@ -77,3 +88,66 @@ async def create_complete_event() -> Dict:
 async def create_error_event(error_message: str) -> Dict:
     """创建错误事件"""
     return await create_event(EventType.ERROR, error_message)
+
+async def create_action_start_event(action: str, action_input: Any) -> Dict:
+    """创建动作开始事件"""
+    return await create_event(EventType.ACTION_START, {
+        "action": action,
+        "input": action_input,
+        "timestamp": time.time()
+    })
+
+async def create_action_complete_event(action: str, result: Any) -> Dict:
+    """创建动作完成事件"""
+    return await create_event(EventType.ACTION_COMPLETE, {
+        "action": action,
+        "result": result,
+        "timestamp": time.time()
+    })
+
+async def create_tool_progress_event(tool: str, status: str, result: Any) -> Dict:
+    """创建工具进度事件"""
+    return await create_event(EventType.TOOL_PROGRESS, {
+        "tool": tool,
+        "status": status,
+        "result": str(result),
+        "timestamp": time.time()
+    })
+
+async def create_tool_retry_event(tool: str, attempt: int, max_retries: int, error: str) -> Dict:
+    """创建工具重试事件"""
+    return await create_event(EventType.TOOL_RETRY, {
+        "tool": tool,
+        "attempt": attempt,
+        "max_retries": max_retries,
+        "error": error,
+        "timestamp": time.time()
+    })
+
+async def create_agent_start_event(query: str) -> Dict:
+    """创建agent开始事件"""
+    return await create_event(EventType.AGENT_START, {
+        "query": query,
+        "timestamp": time.time()
+    })
+
+async def create_agent_complete_event(result: str) -> Dict:
+    """创建agent完成事件"""
+    return await create_event(EventType.AGENT_COMPLETE, {
+        "result": result,
+        "timestamp": time.time()
+    })
+
+async def create_agent_error_event(error: str) -> Dict:
+    """创建agent错误事件"""
+    return await create_event(EventType.AGENT_ERROR, {
+        "error": error,
+        "timestamp": time.time()
+    })
+
+async def create_agent_thinking_event(thought: str) -> Dict:
+    """创建agent思考事件"""
+    return await create_event(EventType.AGENT_THINKING, {
+        "thought": thought,
+        "timestamp": time.time()
+    })
