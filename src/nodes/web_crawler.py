@@ -22,7 +22,7 @@ class SerperWebCrawlerNode(BaseNode):
         self.api_key = os.getenv('SERPER_API_KEY', '')
         self.api_url = 'https://scrape.serper.dev'
 
-    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         start_time = time.time()
         url = str(params.get("url", "")).strip()
         if not url:

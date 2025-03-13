@@ -7,13 +7,14 @@ import logging
 from typing import Dict, Optional, List, Type
 from ..agent.agent import Tool
 from ..nodes.base import BaseNode
+from ..core.engine import WorkflowEngine
 
 logger = logging.getLogger(__name__)
 
 class NodeConfigManager:
     """节点配置管理类"""
     
-    def __init__(self, config_path: str = None):
+    def __init__(self, config_path: str = None, engine: WorkflowEngine = None):
         """
         初始化节点配置管理器
         
@@ -34,6 +35,7 @@ class NodeConfigManager:
         self.config_path = config_path
         self.node_configs = self._load_config()
         self._node_types: Dict[str, Type[BaseNode]] = {}
+        self.engine = engine
     
     def _load_config(self) -> Dict:
         """加载节点配置"""
@@ -65,7 +67,7 @@ class NodeConfigManager:
     def get_all_nodes(self) -> List[Dict]:
         """
         获取所有节点的配置信息
-         
+        
         Returns:
             所有节点的配置信息列表
         """
@@ -88,7 +90,6 @@ class NodeConfigManager:
         """
         self._node_types[type_name] = node_class
 
-        
     def get_tools(self) -> List[Tool]:
         """
         将现有节点转换为Agent可用的工具列表
@@ -138,7 +139,8 @@ class NodeConfigManager:
             node_class = self._node_types.get(node_type)
             if not node_class:
                 continue
-            
+            if node_type == "loop_node":
+                node_class.init_engine(node_class, self.engine)
             # 创建一个闭包来保存node_class和node_info
             def create_tool_runner(node_class, node_info):
                 async def run(input_text: str) -> str:

@@ -43,8 +43,7 @@ module_logger = logging.getLogger(__name__)
 engine = WorkflowEngine()
 workflow_service = WorkflowService(engine)
 stream_manager = StreamManager()
-node_manager = NodeConfigManager()
-
+node_manager = NodeConfigManager(engine=engine)
 # 注册节点状态回调
 def node_status_callback(workflow_id: str, node_id: str, result: NodeResult):
     """处理节点状态变化的回调函数"""

@@ -12,8 +12,8 @@ class LoopNode(BaseNode):
         super().__init__()
         self._engine = None
         logger.info("LoopNode initialized")
-        
-    def init_engine(self, engine: Any):
+       
+    def init_engine(self, engine: any):
         """初始化执行引擎,但不注册loop节点"""
         self._engine = engine
         

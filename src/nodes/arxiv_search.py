@@ -53,8 +53,7 @@ class ArxivSearchNode(BaseNode):
                     "published": paper.published.strftime("%Y-%m-%d"),
                     "pdf_url": paper.pdf_url,
                     "entry_id": paper.entry_id,
-                    "primary_category": paper.primary_category
-,
+                    "primary_category": paper.primary_category,
                     "content": ""
                 }
                 

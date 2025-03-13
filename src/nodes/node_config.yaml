@@ -240,9 +240,9 @@ LoopNode:
     success: "是否全部执行成功"
   params:
     array:
-      type: "Union[str, list]"
+      type: "list"
       required: true
-      description: "要循环执行的数据，是数组,数组元素可以是对象,也可以是基础数据,如字符串,整数等"
+      description: "要循环执行的数据，是数组,数组元素可以是对象,也可以是基础数据,如字符串,数字等"
     workflow_json:
       type: "dict"
       required: true

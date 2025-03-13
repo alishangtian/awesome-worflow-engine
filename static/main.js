@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 用于存储累积的内容
     let currentExplanation = '';
     let currentAnswer = '';
+    let currentIteration = 1; // 当前迭代计数
 
     // 自动滚动到底部的函数
     let isScrolling = false;
@@ -64,9 +65,20 @@ document.addEventListener('DOMContentLoaded', () => {
             // 如果没有error，则根据status判断
             switch(data.status) {
                 case 'running':
-                    statusClass = 'running';
-                    statusText = '执行中';
-                    content = '<div class="running-indicator"></div>';
+                    // 如果是上一个迭代的节点或已完成的节点，显示为completed
+                    if (data.iteration && data.iteration < currentIteration) {
+                        statusClass = 'success';
+                        statusText = '执行完成';
+                        content = data.data ? `<pre>${JSON.stringify(data.data, null, 2)}</pre>` : '';
+                    } else if (data.completed) {
+                        statusClass = 'success';
+                        statusText = '执行完成';
+                        content = data.data ? `<pre>${JSON.stringify(data.data, null, 2)}</pre>` : '';
+                    } else {
+                        statusClass = 'running';
+                        statusText = '执行中';
+                        content = '<div class="running-indicator"></div>';
+                    }
                     break;
                 case 'completed':
                     statusClass = 'success';
@@ -230,6 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 处理工作流事件
             eventSource.addEventListener('workflow', event => {
+                currentIteration++; // 每次收到新的工作流事件时增加迭代计数
                 try {
                     const workflow = JSON.parse(event.data);
                     const workflowDiv = document.createElement('div');
@@ -263,6 +276,22 @@ document.addEventListener('DOMContentLoaded', () => {
             eventSource.addEventListener('node_result', event => {
                 try {
                     const result = JSON.parse(event.data);
+                    // 如果当前节点完成，将之前所有运行中的节点标记为完成
+                    if (result.status === 'completed') {
+                        const runningNodes = answerElement.querySelectorAll('.node-result.running');
+                        runningNodes.forEach(node => {
+                            node.classList.remove('running');
+                            node.classList.add('success');
+                            const statusSpan = node.querySelector('.node-header span:last-child');
+                            if (statusSpan) {
+                                statusSpan.textContent = '执行完成';
+                            }
+                            const loadingIndicator = node.querySelector('.running-indicator');
+                            if (loadingIndicator) {
+                                loadingIndicator.remove();
+                            }
+                        });
+                    }
                     renderNodeResult(result, answerElement);
                 } catch (error) {
                     answerElement.innerHTML += `<div class="error">解析节点结果失败</div>`;
@@ -308,7 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     progressDiv.innerHTML = `
                         <div class="tool-header">
                             <span>工具: ${data.tool}</span>
-                            <span class="tool-status ${data.status}">${data.status === 'success' ? '成功' : '执行中'}</span>
+                            <span class="tool-status ${data.status}">${data.status === 'success' ? '执行完成' : (data.status === 'running' ? '执行中' : data.status)}</span>
                         </div>
                     `;
                     answerElement.appendChild(progressDiv);
@@ -358,6 +387,32 @@ document.addEventListener('DOMContentLoaded', () => {
             eventSource.addEventListener('action_complete', event => {
                 try {
                     const data = JSON.parse(event.data);
+                    
+                    // 立即更新所有相关节点的状态为完成
+                    const allNodes = answerElement.querySelectorAll('.node-result');
+                    allNodes.forEach(node => {
+                        if (node.classList.contains('running')) {
+                            // 更新状态为完成
+                            node.classList.remove('running');
+                            node.classList.add('success');
+                            const statusSpan = node.querySelector('.node-header span:last-child');
+                            if (statusSpan) {
+                                statusSpan.textContent = '执行完成';
+                            }
+                            // 移除加载动画并添加完成内容
+                            const nodeContent = node.querySelector('.node-content');
+                            if (nodeContent) {
+                                const loadingIndicator = nodeContent.querySelector('.running-indicator');
+                                if (loadingIndicator) {
+                                    loadingIndicator.remove();
+                                }
+                                if (data.result) {
+                                    nodeContent.innerHTML = `<pre>${JSON.stringify(data.result, null, 2)}</pre>`;
+                                }
+                            }
+                        }
+                    });
+
                     const completeDiv = document.createElement('div');
                     completeDiv.className = 'action-complete';
                     completeDiv.innerHTML = `
