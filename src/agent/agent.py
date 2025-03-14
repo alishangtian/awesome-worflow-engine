@@ -1,4 +1,3 @@
-from .prompt.agent_prompt import REACT_PROMPT_TEMPLATES
 from typing import List, Dict, Any, Optional, Union, Callable, TypeVar, Generic
 from dataclasses import dataclass, field
 import asyncio
@@ -202,7 +201,7 @@ class Agent:
         tools: List[Tool],
         instruction: str = "",
         timeout: int = 120,
-        max_iterations: int = 5,
+        max_iterations: int = 10,
         memory_size: int = 10,
         cache_size: int = 100,
         cache_ttl: int = 3600,
@@ -271,8 +270,7 @@ class Agent:
             "tools": tools_list,
             "tool_names": tool_names,
             "query": query,
-            "agent_scratchpad": agent_scratchpad,
-            "workflow_example": self.get_nodes_json_example()
+            "agent_scratchpad": agent_scratchpad
         }
         agent_prompt = Template(COT_COMPLETION_PROMPT_TEMPLATES).safe_substitute(values)
         return agent_prompt
@@ -330,13 +328,6 @@ class Agent:
                     prompt = self._construct_prompt(query, agent_scratchpad)
                     logger.info(f"Prompt for iteration {iteration_count}: \n{prompt}")
 
-                    # 发送agent思考事件
-                    if stream and self.stream_manager:
-                        event = await create_agent_thinking_event(
-                            f"Iteration {iteration_count}"
-                        )
-                        await self.stream_manager.send_message(chat_id, event)
-
                     model_response = await asyncio.wait_for(
                         self._call_model(prompt, chat_id), timeout=self.timeout
                     )
@@ -348,6 +339,13 @@ class Agent:
                     action_input = action_dict.get("action_input", "")
                     thought = result_dict.get("Thought", {})
                     observation = result_dict.get("Observation", "")
+                    
+                    # 发送agent思考事件
+                    if stream and self.stream_manager:
+                        event = await create_agent_thinking_event(
+                            f"{thought}"
+                        )
+                        await self.stream_manager.send_message(chat_id, event)
 
                     if action == "Final Answer":
                         final_answer = action_input
@@ -447,111 +445,3 @@ class Agent:
                 event = await create_agent_error_event(error_msg)
                 await self.stream_manager.send_message(chat_id, event)
             raise
-        
-    def get_nodes_json_example(self) -> str:
-        """
-        获取节点配置的JSON示例，展示一个实际的工作流场景
-        
-        Returns:
-            str: JSON格式的工作流示例
-        """
-        workflow_json = {
-            "nodes": [
-                # 第一层：搜索相关论文
-                {
-                    "id": "arxiv_search",
-                    "type": "arxiv_search",
-                    "params": {
-                        "query": "Large Language Models recent advances"
-                    }
-                },
-                # 第二层：循环处理搜索结果
-                {
-                    "id": "loop_papers",
-                    "type": "loop_node",
-                    "params": {
-                        "array": "${arxiv_search.results}",
-                        "workflow_json": {
-                            "nodes": [
-                                # 获取每篇论文的PDF内容
-                                {
-                                    "id": "crawler",
-                                    "type": "web_crawler",
-                                    "params": {
-                                        "url": "${item.pdf_url}"
-                                    }
-                                },
-                                # 使用AI分析论文内容
-                                {
-                                    "id": "paper_analysis",
-                                    "type": "chat",
-                                    "params": {
-                                        "system_prompt": "You are a research assistant. Analyze the given paper and extract key findings and contributions.",
-                                        "user_question": "Please analyze this paper and provide key findings:\n${crawler.content}",
-                                        "temperature": 0.3
-                                    }
-                                },
-                                # 保存分析结果到文件
-                                {
-                                    "id": "save_analysis",
-                                    "type": "file_write",
-                                    "params": {
-                                        "filename": "${item.entry_id}",
-                                        "content": "Title: ${item.title}\nAuthors: ${item.authors}\nAnalysis:\n${paper_analysis.response}",
-                                        "format": "txt"
-                                    }
-                                }
-                            ],
-                            "edges": [
-                                {"from": "crawler", "to": "paper_analysis"},
-                                {"from": "paper_analysis", "to": "save_analysis"}
-                            ]
-                        }
-                    }
-                },
-                # 第三层：数据库操作
-                {
-                    "id": "db_save",
-                    "type": "db_execute",
-                    "params": {
-                        "host": "localhost",
-                        "database": "research_db",
-                        "user": "researcher",
-                        "password": "password123",
-                        "statement": "INSERT INTO paper_analysis (paper_id, title, authors, analysis) VALUES (?, ?, ?, ?)",
-                        "parameters": ["${item.entry_id}", "${item.title}", "${item.authors}", "${paper_analysis.response}"]
-                    }
-                },
-                # 第四层：执行Python代码进行数据分析
-                {
-                    "id": "data_analysis",
-                    "type": "python_execute",
-                    "params": {
-                        "code": """
-                        import pandas as pd
-                        import numpy as np
-                        
-                        def analyze_results(data):
-                            # 进行数据分析
-                            df = pd.DataFrame(data)
-                            summary = {
-                                'total_papers': len(df),
-                                'avg_length': df['analysis'].str.len().mean(),
-                                'key_topics': df['analysis'].str.lower().str.findall(r'\\w+').explode().value_counts().head(10).to_dict()
-                            }
-                            return summary
-                        """,
-                        "variables": {
-                            "data": "${loop_papers.results}"
-                        },
-                        "timeout": 60
-                    }
-                }
-            ],
-            "edges": [
-                {"from": "arxiv_search", "to": "loop_papers"},
-                {"from": "loop_papers", "to": "db_save"},
-                {"from": "db_save", "to": "data_analysis"}
-            ]
-        }
-        return json.dumps(workflow_json, indent=2, ensure_ascii=False)

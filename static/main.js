@@ -1,4 +1,22 @@
+
 document.addEventListener('DOMContentLoaded', () => {
+    // 添加模型选项按钮点击事件
+    const modelOptions = document.querySelectorAll('.model-option');
+    modelOptions.forEach(option => {
+        option.addEventListener('click', (e) => {
+            modelOptions.forEach(btn => btn.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+            
+            // 显示/隐藏轮次输入
+            const itecountContainer = document.getElementById('itecount-container');
+            if (e.currentTarget.getAttribute('data-model') === 'agent') {
+                itecountContainer.style.display = 'inline-block';
+            } else {
+                itecountContainer.style.display = 'none';
+            }
+        });
+    });
+    
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
     const conversationHistory = document.getElementById('conversation-history');
@@ -6,6 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // 用于存储累积的内容
     let currentExplanation = '';
     let currentAnswer = '';
+    let currentActionGroup = null;
+    let currentActionId = null;
     let currentIteration = 1; // 当前迭代计数
 
     // 自动滚动到底部的函数
@@ -69,11 +89,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (data.iteration && data.iteration < currentIteration) {
                         statusClass = 'success';
                         statusText = '执行完成';
-                        content = data.data ? `<pre>${JSON.stringify(data.data, null, 2)}</pre>` : '';
+                    content = data.data ? (typeof data.data === 'string' ? converter.makeHtml(data.data) : `<pre>${JSON.stringify(data.data, null, 2)}</pre>`) : '';
                     } else if (data.completed) {
                         statusClass = 'success';
                         statusText = '执行完成';
-                        content = data.data ? `<pre>${JSON.stringify(data.data, null, 2)}</pre>` : '';
+                    content = data.data ? (typeof data.data === 'string' ? converter.makeHtml(data.data) : `<pre>${JSON.stringify(data.data, null, 2)}</pre>`) : '';
                     } else {
                         statusClass = 'running';
                         statusText = '执行中';
@@ -184,11 +204,24 @@ document.addEventListener('DOMContentLoaded', () => {
         // 创建消息元素
         const questionElement = document.createElement('div');
         questionElement.className = 'history-item';
-        questionElement.innerHTML = `<div class="question">问题: ${text}</div>`;
         
+        // 创建qa-container
+        const qaContainer = document.createElement('div');
+        qaContainer.className = 'qa-container';
+        
+        // 添加问题
+        const questionDiv = document.createElement('div');
+        questionDiv.className = 'question';
+        questionDiv.textContent = text;
+        qaContainer.appendChild(questionDiv);
+        
+        // 添加回答容器
         const answerElement = document.createElement('div');
         answerElement.className = 'answer';
-        questionElement.appendChild(answerElement);
+        qaContainer.appendChild(answerElement);
+        
+        // 将qa-container添加到history-item
+        questionElement.appendChild(qaContainer);
         
         conversationHistory.appendChild(questionElement);
         
@@ -198,9 +231,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // 先发送POST请求创建chat会话
-            const modelSelect = document.getElementById('model-select');
-            const selectedModel = modelSelect.value;
-            
+            const selectedModelButton = document.querySelector('.model-option.active');
+            const selectedModel = selectedModelButton.getAttribute('data-model');
             const response = await fetch('/chat', {
                 method: 'POST',
                 headers: {
@@ -208,7 +240,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({ 
                     text,
-                    model: selectedModel
+                    model: selectedModel,
+                    itecount: selectedModel === 'agent' ? parseInt(document.getElementById('itecount').value) : undefined
                 })
             });
             
@@ -332,15 +365,17 @@ document.addEventListener('DOMContentLoaded', () => {
             eventSource.addEventListener('tool_progress', event => {
                 try {
                     const data = JSON.parse(event.data);
-                    const progressDiv = document.createElement('div');
-                    progressDiv.className = 'tool-progress';
-                    progressDiv.innerHTML = `
-                        <div class="tool-header">
-                            <span>工具: ${data.tool}</span>
-                            <span class="tool-status ${data.status}">${data.status === 'success' ? '执行完成' : (data.status === 'running' ? '执行中' : data.status)}</span>
-                        </div>
-                    `;
-                    answerElement.appendChild(progressDiv);
+                    const actionId = data.action_id || currentActionId;
+                    // 查找工具结果容器并更新状态
+                    const actionGroup = currentActionGroup || answerElement.querySelector(`.action-group[data-action-id="${actionId}"]`);
+                    if (actionGroup) {
+                        const toolStatus = actionGroup.querySelector('.tool-status');
+                        if (toolStatus) {
+                            toolStatus.textContent = '执行中';
+                    
+        toolStatus.className = 'tool-status running';
+                        }
+                    }
                 } catch (error) {
                     console.error('解析工具进度失败:', error);
                 }
@@ -368,16 +403,36 @@ document.addEventListener('DOMContentLoaded', () => {
             eventSource.addEventListener('action_start', event => {
                 try {
                     const data = JSON.parse(event.data);
+                    
+                    // 创建新的action组
+                    currentActionGroup = document.createElement('div');
+                    currentActionGroup.className = 'action-group';
+                    currentActionId = data.action_id || Date.now().toString();
+                    currentActionGroup.setAttribute('data-action-id', currentActionId);
+                    
+                    // 将action组添加到答案容器中
+                    answerElement.appendChild(currentActionGroup);
+                    
+                    // 创建action开始元素
                     const startDiv = document.createElement('div');
+                    startDiv.setAttribute('data-action-id', currentActionId);
                     startDiv.className = 'action-start';
                     startDiv.innerHTML = `
                         <div class="action-info">
-                            <span class="action-name">${data.action}</span>
-                            ${data.input ? `<div class="tool-result"><pre>${JSON.stringify(data.input)}</pre></div>` : ''}
-                            <span class="action-timestamp">${new Date(data.timestamp * 1000).toLocaleTimeString()}</span>
+                            <div class="action-header">
+                                <span class="action-label">工具：</span>
+                                <span class="action-name">${data.action}</span>
+                                <span class="tool-status running">执行中</span>
+                            </div>
+                            <div class="action-params">
+                                <span class="params-label">参数：</span>
+                                <pre class="params-json">${JSON.stringify(data.input, null, 2)}</pre>
+                                <span class="action-timestamp">${new Date(data.timestamp * 1000).toLocaleTimeString()}</span>
+                            </div>
+                            
                         </div>
                     `;
-                    answerElement.appendChild(startDiv);
+                    currentActionGroup.appendChild(startDiv);
                 } catch (error) {
                     console.error('解析action开始事件失败:', error);
                 }
@@ -388,18 +443,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const data = JSON.parse(event.data);
                     
+                    // 更新工具状态为完成
+                    const actionGroup = currentActionGroup || answerElement.querySelector(`.action-group[data-action-id="${data.action_id || currentActionId}"]`);
+                    if (!actionGroup) return;
+                    
+                    // 更新节点状态
                     // 立即更新所有相关节点的状态为完成
-                    const allNodes = answerElement.querySelectorAll('.node-result');
+                    const allNodes = answerElement.querySelectorAll('.tool-status');
+                    console.log(allNodes)
                     allNodes.forEach(node => {
                         if (node.classList.contains('running')) {
                             // 更新状态为完成
+                            console.log(node)
                             node.classList.remove('running');
                             node.classList.add('success');
-                            const statusSpan = node.querySelector('.node-header span:last-child');
-                            if (statusSpan) {
-                                statusSpan.textContent = '执行完成';
-                            }
-                            // 移除加载动画并添加完成内容
+                            node.textContent = '执行完成';
                             const nodeContent = node.querySelector('.node-content');
                             if (nodeContent) {
                                 const loadingIndicator = nodeContent.querySelector('.running-indicator');
@@ -407,22 +465,24 @@ document.addEventListener('DOMContentLoaded', () => {
                                     loadingIndicator.remove();
                                 }
                                 if (data.result) {
-                                    nodeContent.innerHTML = `<pre>${JSON.stringify(data.result, null, 2)}</pre>`;
+                                    nodeContent.innerHTML = typeof data.result === 'string' ? converter.makeHtml(data.result) : `<pre>${JSON.stringify(data.result, null, 2)}</pre>`;
                                 }
                             }
                         }
                     });
 
                     const completeDiv = document.createElement('div');
+                    completeDiv.setAttribute('data-action-id', data.action_id || currentActionId);
                     completeDiv.className = 'action-complete';
                     completeDiv.innerHTML = `
-                        <div class="action-result">
-                            <span class="action-check">✓</span>
-                            <pre class="action-output">${data.result}</pre>
-                            <span class="action-timestamp">${new Date(data.timestamp * 1000).toLocaleTimeString()}</span>
+                                <span class="result-label">结果：</span>
+                                <pre class="result-json">${JSON.stringify(data.result, null, 2)}</pre>
+                                <span class="action-timestamp">${new Date(data.timestamp * 1000).toLocaleTimeString()}</span>
+                            </div>
                         </div>
                     `;
-                    answerElement.appendChild(completeDiv);
+                    actionGroup.appendChild(completeDiv);
+                    currentActionGroup = null; // 重置当前action组
                 } catch (error) {
                     console.error('解析action完成事件失败:', error);
                 }
@@ -489,12 +549,13 @@ document.addEventListener('DOMContentLoaded', () => {
             eventSource.addEventListener('agent_complete', event => {
                 try {
                     const data = JSON.parse(event.data);
+                    const content = data.result;
                     const completeDiv = document.createElement('div');
                     completeDiv.className = 'agent-complete';
                     completeDiv.innerHTML = `
                         <div class="complete-info">
                             <span class="complete-icon">✓</span>
-                            <span class="complete-message">${data.result}</span>
+                            <div class="action_complete">${converter.makeHtml(content)}</div>
                             <span class="complete-timestamp">${new Date(data.timestamp * 1000).toLocaleTimeString()}</span>
                         </div>
                     `;

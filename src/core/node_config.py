@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class NodeConfigManager:
     """节点配置管理类"""
     
-    def __init__(self, config_path: str = None, engine: WorkflowEngine = None):
+    def __init__(self, config_path: str = None, agent_config_path: str = None, engine: WorkflowEngine = None):
         """
         初始化节点配置管理器
         
@@ -31,9 +31,21 @@ class NodeConfigManager:
             else:
                 # 如果nodes目录下没有配置文件，则使用原来的配置路径
                 config_path = os.path.join(current_dir, "../config/node_config.yaml")
+        if agent_config_path is None:
+            # 使用默认配置文件路径
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            # 首先尝试从nodes目录加载配置
+            agent_nodes_config_path = os.path.join(current_dir, "../nodes/agent_node_config.yaml")
+            if os.path.exists(agent_nodes_config_path):
+                agent_config_path = agent_nodes_config_path
+            else:
+                # 如果nodes目录下没有配置文件，则使用原来的配置路径
+                agent_config_path = os.path.join(current_dir, "../config/agent_node_config.yaml")
         
         self.config_path = config_path
+        self.agent_config_path = agent_config_path
         self.node_configs = self._load_config()
+        self.agent_node_configs = self._load_agent_config()
         self._node_types: Dict[str, Type[BaseNode]] = {}
         self.engine = engine
     
@@ -42,6 +54,17 @@ class NodeConfigManager:
         try:
             if os.path.exists(self.config_path):
                 with open(self.config_path, 'r', encoding='utf-8') as f:
+                    return yaml.safe_load(f)
+            return {}
+        except Exception as e:
+            print(f"加载节点配置失败: {str(e)}")
+            return {}
+        
+    def _load_agent_config(self) -> Dict:
+        """加载节点配置"""
+        try:
+            if os.path.exists(self.agent_config_path):
+                with open(self.agent_config_path, 'r', encoding='utf-8') as f:
                     return yaml.safe_load(f)
             return {}
         except Exception as e:
@@ -80,6 +103,23 @@ class NodeConfigManager:
             # 直接使用配置中的type字段
             nodes.append(config)
         return nodes
+    
+    def get_all_agent_nodes(self) -> List[Dict]:
+        """
+        获取所有节点的配置信息
+        
+        Returns:
+            所有节点的配置信息列表
+        """
+        nodes = []
+        for class_name, config in self.agent_node_configs.items():
+            # 确保配置是字典类型
+            if not isinstance(config, dict):
+                print(f"警告: 节点 {class_name} 的配置无效")
+                continue
+            # 直接使用配置中的type字段
+            nodes.append(config)
+        return nodes
         
     def register_node_type(self, type_name: str, node_class):
         """注册节点类型
@@ -98,7 +138,7 @@ class NodeConfigManager:
             List[Tool]: Tool对象列表，每个Tool包含name、description、parameters、outputs和run方法
         """
         tools = []
-        nodes = self.get_all_nodes()
+        nodes = self.get_all_agent_nodes()
         
         for node_info in nodes:
             node_type = node_info.get("type")
@@ -146,8 +186,8 @@ class NodeConfigManager:
                 async def run(input_text: str) -> str:
                     try:
                         node_instance = node_class()
-                        result = await node_instance.execute(input_text)
-                        return result
+                        result = await node_instance.agent_execute(input_text)
+                        return result["result"]
                     except Exception as e:
                         return f"Error executing node: {str(e)}"
                 return run

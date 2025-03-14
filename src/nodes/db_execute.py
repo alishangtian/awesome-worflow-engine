@@ -48,3 +48,36 @@ class DbExecuteNode(BaseNode):
         finally:
             pool.close()
             await pool.wait_closed()
+            
+    async def agent_execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """执行节点并将结果转换为统一格式
+        
+        将数据库执行结果转换为包含操作状态、影响行数等信息的文本。
+        
+        Args:
+            params: 节点参数
+            
+        Returns:
+            Dict[str, Any]: 执行结果，包含纯文本格式的'result'键
+        """
+        try:
+            execute_result = await self.execute(params)
+            
+            # 组织执行结果信息
+            result_text = (
+                f"Database operation executed successfully:\n"
+                f"- Database: {params['database']}\n"
+                f"- Statement: {execute_result['statement']}\n"
+                f"- Rows affected: {execute_result['rows_affected']}\n"
+                f"- Last inserted ID: {execute_result['last_row_id'] if execute_result['last_row_id'] else 'N/A'}\n"
+                f"- Auto commit: {params.get('auto_commit', True)}"
+            )
+            
+            return {
+                "result": result_text
+            }
+        except Exception as e:
+            return {
+                "result": f"Error: {str(e)}",
+                "error": str(e)
+            }

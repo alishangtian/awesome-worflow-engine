@@ -1,0 +1,297 @@
+# 节点配置文件
+# 定义所有可用的节点类型及其参数
+# 每个节点类型包含type、name、description、output、params等字段
+PythonExecuteNode:
+  type: "python_execute"
+  name: "Python函数执行"
+  description: "通用Python代码执行节点，支持执行自定义Python函数，可用于科学计算、数据处理、算法实现等多种场景。内置支持numpy、pandas等科学计算库，可实现复杂的数学运算、统计分析等功能。"
+  output:
+    result: "函数执行结果"
+  params:
+    code:
+      type: "str"
+      required: true
+      description: "要执行的Python函数定义代码。
+        切记：代码的缩进和换行格式必须正确，否则会导致执行失败
+        支持以下场景：
+        1. 数学计算：可使用numpy进行矩阵运算、统计分析等
+        2. 数据处理：可使用pandas进行数据清洗、转换、分析等
+        3. 科学计算：支持scipy进行积分、优化、信号处理等
+        4. 算法实现：可实现排序、搜索、图论等算法
+        5. 文本处理：支持正则表达式、分词、编码转换等
+        6. 自定义计算：可实现任意自定义的计算逻辑"
+    variables:
+      type: "dict"
+      required: false
+      default: {}
+      description: "函数执行的参数字典，可传入各类数据类型：
+        1. 基础类型：数字、字符串、布尔值等
+        2. 复合类型：列表、字典、元组等
+        3. 特殊类型：日期时间、二进制数据等
+        4. 数据结构：DataFrame、ndarray等"
+    timeout:
+      type: "int"
+      required: false
+      default: 30
+      description: "执行超时时间(秒)，用于控制长时间运算的超时限制"
+
+ChatNode:
+  type: "chat"
+  name: "AI对话"
+  description: "基于大语言模型的AI对话节点，支持自然语言理解、文本生成、知识问答等功能。
+                可用于文本处理、内容生成、智能问答、数据分析等需要上下文理解的任务。
+                切记：上下文内容只支持纯文本，不能是对象，如果是对象，需要将对象的文本字段进行拼接之后才能传给模型进行文本生成"
+  output:
+    result: "AI响应内容，包括生成的文本、分析结果或处理后的数据"
+  params:
+    user_question:
+      type: "str"
+      required: true
+      description: "用户输入的问题、提示和上下文参考信息，支持：
+        1. 自然语言问答：获取问题答案
+        2. 文本生成：创建文章、摘要、描述
+        3. 代码生成：生成各种编程语言的代码
+        4. 数据分析：解析和分析文本数据
+        5. 文本转换：格式转换、翻译、改写
+        6. 逻辑推理：执行推理、决策和问题解决"
+    system_prompt:
+      type: "str"
+      required: false
+      default: ""
+      description: "系统指令，用于指导AI的行为和设置上下文。可用于：
+        1. 定义AI的角色和个性
+        2. 设置特定规则或约束
+        3. 提供背景信息
+        4. 指定输出格式要求
+        5. 配置任务特定行为"
+    temperature:
+      type: "float"
+      required: false
+      default: 0.7
+      description: "温度参数(0-1)控制输出的随机性：
+        - 较低的值(接近0)：更确定性、保守的输出
+        - 较高的值(接近1)：更多样化、创造性的输出"
+
+FileReadNode:
+  type: "file_read"
+  name: "文件读取"
+  description: "文件读取节点"
+  output:
+    result: "文件内容"
+  params:
+    path:
+      type: "str"
+      required: true
+      description: "文件路径"
+    encoding:
+      type: "str"
+      required: false
+      default: "utf-8"
+      description: "文件编码"
+
+FileWriteNode:
+  type: "file_write"
+  name: "文件写入"
+  description: "文件写入节点，支持指定文件名称、内容和格式"
+  config:
+    default_write_path: "./data/file"
+  output:
+    result: "写入结果"
+  params:
+    filename:
+      type: "str"
+      required: true
+      description: "文件名称（不需要包含格式后缀）"
+    content:
+      type: "str"
+      required: true
+      description: "要写入的文件内容"
+    format:
+      type: "str"
+      required: false
+      default: "txt"
+      description: "文件格式（如txt、json、csv等）"
+    encoding:
+      type: "str"
+      required: false
+      default: "utf-8"
+      description: "文件编码"
+
+DbQueryNode:
+  type: "db_query"
+  name: "数据库查询"
+  description: "MySQL数据库查询节点"
+  output:
+    result: "查询结果集"
+  params:
+    host:
+      type: "str"
+      required: true
+      description: "数据库主机地址"
+    port:
+      type: "int"
+      required: false
+      default: 3306
+      description: "数据库端口"
+    user:
+      type: "str"
+      required: true
+      description: "数据库用户名"
+    password:
+      type: "str"
+      required: true
+      description: "数据库密码"
+    database:
+      type: "str"
+      required: true
+      description: "数据库名称"
+    query:
+      type: "str"
+      required: true
+      description: "SQL查询语句"
+    parameters:
+      type: "tuple"
+      required: false
+      default: ()
+      description: "查询参数(元组格式)"
+
+DbExecuteNode:
+  type: "db_execute"
+  name: "数据库执行"
+  description: "MySQL数据库执行节点"
+  output:
+    result: "sql执行结果"
+  params:
+    host:
+      type: "str"
+      required: true
+      description: "数据库主机地址"
+    port:
+      type: "int"
+      required: false
+      default: 3306
+      description: "数据库端口"
+    user:
+      type: "str"
+      required: true
+      description: "数据库用户名"
+    password:
+      type: "str"
+      required: true
+      description: "数据库密码"
+    database:
+      type: "str"
+      required: true
+      description: "数据库名称"
+    statement:
+      type: "str"
+      required: true
+      description: "SQL执行语句"
+    parameters:
+      type: "tuple"
+      required: false
+      default: ()
+      description: "执行参数(元组格式)"
+    auto_commit:
+      type: "bool"
+      required: false
+      default: true
+      description: "是否自动提交"
+
+TerminalNode:
+  type: "terminal"
+  name: "终端命令"
+  description: "执行终端命令节点"
+  output:
+    result: "命令标准输出"
+  params:
+    command:
+      type: "str"
+      required: true
+      description: "要执行的shell命令"
+    shell:
+      type: "bool"
+      required: false
+      default: true
+      description: "是否使用shell执行命令"
+
+SerperSearchNode:
+  type: "serper_search"
+  name: "Serper搜索引擎"
+  description: "Serper搜索引擎节点，可以搜索一些时下最新的信息，如新闻、论坛、博客等"
+  output:
+    result: "搜索结果，网页url和网页概要的拼接结果"
+  params:
+    query:
+      type: "str"
+      required: true
+      description: "搜索关键词"
+    country:
+      type: "str"
+      required: false
+      default: "cn"
+      description: "搜索国家代码"
+    language:
+      type: "str"
+      required: false
+      default: "zh"
+      description: "搜索语言代码"
+    max_results:
+      type: "int"
+      required: false
+      default: 20
+      description: "最大搜索结果数量"
+
+ArxivSearchNode:
+  type: "arxiv_search"
+  name: "Arxiv论文搜索"
+  description: "搜索Arxiv论文库，返回最相关的5篇论文信息，包括标题、作者、摘要、发布日期、PDF链接等"
+  output:
+    result: "论文搜索结果，论文标题和正文的拼接结果"
+  params:
+    query:
+      type: "str"
+      required: true
+      description: "搜索关键词，支持标题、作者、摘要等字段的搜索"
+
+SerperWebCrawlerNode:
+  type: "web_crawler"
+  name: "网络爬虫"
+  description: "接收URL并返回网页正文内容的节点"
+  output:
+    result: "提取的正文内容"
+  params:
+    url:
+      type: "str"
+      required: true
+      description: "需要抓取的网页URL"
+
+ApiCallNode:
+  type: "api_call"
+  name: "API调用"
+  description: "通用API调用节点，支持Bearer Token认证，可用于调用各类REST API接口"
+  output:
+    result: "响应数据"
+  params:
+    url:
+      type: "str"
+      required: true
+      description: "API接口地址"
+    method:
+      type: "str"
+      required: true
+      description: "HTTP请求方法(GET, POST, PUT, DELETE等)"
+    headers:
+      type: "dict"
+      required: false
+      default: {}
+      description: "请求头，键值对格式"
+    body:
+      type: "dict"
+      required: false
+      default: {}
+      description: "请求体数据，JSON格式"
+    bearer_token:
+      type: "str"
+      required: false
+      description: "Bearer Token认证令牌"

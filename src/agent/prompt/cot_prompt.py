@@ -5,18 +5,17 @@ ${instruction}
 ${tools}
 可用工具名称:
 "Final Answer" or ${tool_names}
-工作流示例：
-${workflow_example}
 
 使用JSON格式返回结构化输出：
 
-每次只输出一个action步骤，必须是以下JSON对象：
+每次只输出一个action步骤，必须是以下格式正确的JSON对象：
+切记：action_input字段是对象，不是字符串，当value对应的是长str时，注意不能截断，只能用\\n表示，因为长换行字符串不符合json规范
 ```
 {
   "Thought": "分析问题的思考过程",
   "Action": {
     "action": "工具名称",
-    "action_input": "工具参数"
+    "action_input": "工具参数，json对象"
   },
   "Observation": "工具返回的观察结果"
 }

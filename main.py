@@ -154,7 +154,8 @@ class NaturalLanguageResponse(BaseModel):
     content: Union[str, Dict[str, Any]]
 
 @app.post("/chat")
-async def create_chat(text: str = Body(..., embed=True),model: str = Body(..., embed=True)):
+async def create_chat(text: str = Body(..., embed=True),model: str = Body(..., embed=True),
+                      itecount: int = Body(5, embed=True)):
     """创建新的聊天会话
     
     Args:
@@ -171,7 +172,7 @@ async def create_chat(text: str = Body(..., embed=True),model: str = Body(..., e
         asyncio.create_task(process_workflow(chat_id, text))
     elif model == "agent":
         # 启动智能体异步任务处理用户请求
-        asyncio.create_task(process_agent(chat_id, text))
+        asyncio.create_task(process_agent(chat_id, text, itecount))
     else:
         raise HTTPException(status_code=400, detail="Invalid model type")
         
@@ -284,7 +285,7 @@ async def process_workflow(chat_id: str, text: str):
         module_logger.error(f"[{chat_id}] {error_msg}", exc_info=True)
         await stream_manager.send_message(chat_id, await create_error_event(error_msg))
 
-async def process_agent(chat_id: str, text: str):
+async def process_agent(chat_id: str, text: str,itecount: int):
     """处理Agent请求的异步函数
     
     Args:
@@ -295,20 +296,13 @@ async def process_agent(chat_id: str, text: str):
     try:
         # 获取工具集合并实例化Agent，传入stream_manager
         tools = node_manager.get_tools()
-        agent = Agent(tools=tools, stream_manager=stream_manager)
+        agent = Agent(tools=tools, stream_manager=stream_manager,max_iterations=itecount)
         
         # 开始处理Agent请求
-        await stream_manager.send_message(chat_id, await create_status_event("agent_processing", "正在处理Agent请求..."))
+        # await stream_manager.send_message(chat_id, await create_status_event("agent_processing", "开始处理Agent请求"))
         
         # 调用Agent的run方法，启用stream功能
-        result = await agent.run(text, chat_id)
-        
-        # 发送最终结果
-        await stream_manager.send_message(chat_id, await create_answer_event({
-            "event": "agent_response",
-            "success": True,
-            "data": result
-        }))
+        await agent.run(text, chat_id)
         
         await stream_manager.send_message(chat_id, await create_complete_event())
     except Exception as e:

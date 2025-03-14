@@ -1,24 +1,42 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>工作流引擎</title>
-    <link rel="stylesheet" href="/static/styles.css">
-    <script src="/static/showdown.min.js"></script>
-    <script src="/static/main.js"></script>
-</head>
-<body>
-    <div class="container">
-        <div id="conversation-history"></div>
-        <div class="input-container">
-            <select id="model-select">
-                <option value="workflow">工作流模式</option>
-                <option value="agent">智能体模式</option>
-            </select>
-            <input type="text" autocomplete="off" id="user-input" placeholder="请输入您的问题..." autofocus>
-            <button id="send-button">发送</button>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>工作流引擎</title>
+        <link rel="stylesheet" href="/static/styles.css">
+        <script src="/static/showdown.min.js"></script>
+        <script src="/static/main.js"></script>
+    </head>
+    <body>
+        <div class="container">
+            <div id="conversation-history"></div>
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <textarea id="user-input" placeholder="询问任何问题"></textarea>
+                    <div class="input-controls">
+                        <div class="model-options">
+                            <button class="model-option active"
+                                data-model="workflow" type="button">
+                                <i class="icon-search"></i>
+                                自动工作流
+                            </button>
+                            <button class="model-option" data-model="agent"
+                                type="button">
+                                <i class="icon-reason"></i>
+                                智能体
+                            </button>
+                            <div id="itecount-container" style="display: none;">
+                                <i class="icon-iteration"></i>
+                                <span class="itecount-label">迭代轮次</span>
+                                <input type="number" id="itecount" min="1" value="5"
+                                    placeholder="轮次">
+                            </div>
+                        </div>
+                        <button id="send-button">发送</button>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
-</body>
+    </body>
 </html>

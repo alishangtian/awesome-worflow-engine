@@ -36,3 +36,15 @@ class DuckDuckGoSearchNode(BaseNode):
                 "results": [],
                 "count": 0
             }
+    
+    async def agent_execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        combined_text = ""
+        result = await self.execute(params)
+        for item in result.get("results", []):
+            summary = item.get("body", "")
+            url = item.get("href", "")
+            combined_text += f"URL: {url}\n摘要：{summary}\n{'='*40}\n"
+        return {
+            "success": result.get("success", False),
+            "result": combined_text
+        }
